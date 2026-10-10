@@ -15,7 +15,11 @@ matching the supplied schema, without Markdown. No tools or external actions.
 Missing fields are null (service/usage_kind may be unknown); do not guess.
 Distinguish electricity from water/gas using the billed service, not footer text.
 Use ISO dates and uppercase ISO currency. Preserve full account and meter IDs.
-consumption is actual imported consumption in kWh, NOT net/export or graph estimates.
+consumption is actual imported consumption as printed, NOT net/export or graph estimates.
+unit is the consumption unit, not the currency. If the source prints kWh (any
+letter case), write unit exactly "kWh". Preserve other units and quantities;
+never convert quantities or relabel another unit as kWh. Unit is null only when
+the source does not state one. Its evidence must quote the printed unit.
 current_total is current electricity charges, NOT amount due or a previous balance.
 List current components as additive. A fee already inside another component is
 included; account payments, balances and other services are excluded. Do not list
@@ -31,7 +35,8 @@ Do not add evidence for null/unknown facts or the charges array itself.
 Dates and billed days need their own evidence even if sharing the same quote.
 User review is required; source matching does not establish semantic correctness.
 If validation_feedback is provided, return a complete corrected object using
-only the original pages. Never invent a missing fact or a source quote.
+only the original pages. Do not erase a sourced fact to avoid supplying its
+evidence. Never invent a missing fact or a source quote.
 """
 
 
