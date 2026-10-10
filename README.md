@@ -42,6 +42,8 @@ Optional `OCI_MODEL`, `OPENAI_MODEL`, `ANTHROPIC_MODEL` override model IDs. The 
 shows the selected model and asks before sending extracted text, including
 identifiers. AI proposes facts with exact source quotes; you review them before
 calculation. GitHub secrets are used by hosted checks, not downloaded to this app.
+Extraction allows one correction attempt, with at most two model invocations
+inside a shared 100-second deadline; unresolved facts still need manual review.
 
 This presenter binds to `127.0.0.1` with one worker. Work stays in process memory
 for a fixed 30-minute session and is discarded on sign-out, expiry or restart;

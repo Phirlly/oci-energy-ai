@@ -48,7 +48,7 @@ export default function BillEditor({ doc, draft, dirty, busy, providers, models,
         Server-side provider credentials enable optional extraction.</p>}
       {running && <p role="status">Reading bill… <button onClick={cancel}>Cancel extraction</button></p>}
       {doc.job?.status === 'failed' && <p role="alert">{doc.job.error}</p>}
-      {doc.job?.status === 'complete' && <p className="muted">Proposal ready · {doc.job.usage.requests} model request · review before approving.</p>}
+      {doc.job?.status === 'complete' && <p className="muted">Proposal ready · {doc.job.usage.requests} model request{doc.job.usage.requests === 1 ? '' : 's'} · review before approving.</p>}
     </div>
     <fieldset disabled={busy || running} className="fact-fields">
       <legend className="sr-only">Editable bill facts</legend>

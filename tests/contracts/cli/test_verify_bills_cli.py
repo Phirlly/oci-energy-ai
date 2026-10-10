@@ -47,7 +47,7 @@ class PublicBillVerificationTests(unittest.TestCase):
         data["evidence"]["private-marker"] = dict(page=1, quote="secret-marker")
         @asynccontextmanager
         async def opened(*args, **kwargs):
-            yield ScriptedModel([[message(data)]])
+            yield ScriptedModel([[message(data)], [message(data)]])
         factory.side_effect = opened
         output = io.StringIO()
         with redirect_stdout(output):
