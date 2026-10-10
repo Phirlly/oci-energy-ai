@@ -30,7 +30,8 @@ User review is required; source matching does not establish semantic correctness
 
 
 class ExtractionError(ValueError):
-    def __init__(self):
+    def __init__(self, category="verification"):
+        self.category = category
         super().__init__("AI could not produce verifiable bill facts. Retry or enter the facts manually.")
 
 
@@ -56,8 +57,23 @@ async def extract_bill(model, pages, *, timeout=100):
                 max_turns=1, run_config=RunConfig(tracing_disabled=True, trace_include_sensitive_data=False))
         if not isinstance(result.final_output, str) or len(result.final_output) > 60000:
             raise ValueError()
-        candidate = Candidate.model_validate_json(result.final_output).verify(pages)
+        try:
+            value = json.loads(result.final_output)
+        except ValueError:
+            raise ExtractionError("json") from None
+        try:
+            candidate = Candidate.model_validate(value)
+        except ValueError:
+            raise ExtractionError("schema") from None
+        try:
+            candidate.verify(pages)
+        except ValueError:
+            raise ExtractionError("evidence") from None
         usage = result.context_wrapper.usage
         return ExtractionResult(candidate, usage.requests, usage.input_tokens, usage.output_tokens)
+    except ExtractionError:
+        raise
+    except TimeoutError:
+        raise ExtractionError("timeout") from None
     except Exception:
-        raise ExtractionError() from None
+        raise ExtractionError("provider") from None

@@ -99,6 +99,7 @@ test('prepared example can be corrected, approved, compared and deleted', async 
   await page.getByRole('button', { name: 'Approve reviewed facts' }).click();
   await page.getByRole('button', { name: 'Calculate insights' }).click();
   await expect(page.getByTestId('daily-usage')).toHaveText('20.00 kWh/day');
+  await expect(page.getByRole('heading', { name: 'Supplied-period insights' })).toBeFocused();
   await page.getByLabel('Consumption (kWh)').fill('870');
   await expect(page.getByTestId('daily-usage')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Approve reviewed facts' })).toBeDisabled();

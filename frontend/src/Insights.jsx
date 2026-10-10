@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 
 export default function Insights({ result, documents }) {
+  const heading = useRef(null);
+  useEffect(() => { heading.current?.focus(); }, [result]);
   const aggregate = result.aggregate;
   return <section className="insights" aria-labelledby="insights-heading">
-    <p className="eyebrow">03 / Understand</p><h2 id="insights-heading">{result.label}</h2>
+    <p className="eyebrow">03 / Understand</p><h2 id="insights-heading" ref={heading} tabIndex={-1}>{result.label}</h2>
     {aggregate && <div className="metrics">
       <div><span>Daily consumption</span><strong data-testid="daily-usage">{aggregate.daily_kwh} kWh/day</strong></div>
       <div><span>Current electricity charges</span><strong>{aggregate.current_total === null ? 'Unavailable' : aggregate.currency + ' ' + aggregate.current_total}</strong></div>

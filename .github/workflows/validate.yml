@@ -71,3 +71,33 @@ jobs:
         run: terraform fmt -check -recursive
       - if: matrix.version == '1.16.4'
         run: terraform test -no-color
+
+  browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: '0.12.19'
+          enable-cache: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '26.10.0'
+          package-manager-cache: false
+      - run: uv sync --locked --no-dev
+      - run: npm ci --ignore-scripts --registry=https://registry.npmjs.org
+        working-directory: frontend
+      - run: npm audit --registry=https://registry.npmjs.org
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
+      - run: npx --no-install playwright install --with-deps chromium
+        working-directory: frontend
+      - run: npm test
+        working-directory: frontend

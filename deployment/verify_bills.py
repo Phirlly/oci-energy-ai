@@ -10,7 +10,7 @@ import time
 from deployment.verify_models import provider_options, verify_selected
 from energy_ai.agents.provider_clients import DEFAULT_MODELS, open_model
 from energy_ai.bills.examples import EXAMPLES
-from energy_ai.bills.extraction import extract_bill
+from energy_ai.bills.extraction import ExtractionError, extract_bill
 from energy_ai.bills.insights import summarize
 
 
@@ -42,18 +42,22 @@ def check_facts(facts, index):
 async def verify_bill_provider(provider, environment):
     started = time.monotonic()
     checks = []
+    stage = "provider_or_configuration"
     try:
         async with open_model(provider, **provider_options(provider, environment)) as model:
             for index, text in enumerate(EXAMPLES):
+                stage = "extraction"
                 result = await extract_bill(model, [text])
+                stage = "expected_facts"
                 check_facts(result.candidate.facts, index)
                 checks.append(dict(fixture=("electric-summary", "electric-table", "water-only")[index],
                                    model_requests=result.requests, input_tokens=result.input_tokens,
                                    output_tokens=result.output_tokens))
         return dict(provider=provider, status="passed", checks=checks,
                     elapsed_seconds=round(time.monotonic() - started, 2))
-    except Exception:
+    except Exception as error:
         return dict(provider=provider, status="failed", completed_checks=len(checks),
+                    stage="extraction_" + error.category if isinstance(error, ExtractionError) else stage,
                     guidance="Public bill extraction or expected-fact check failed; raw details suppressed.")
 
 
