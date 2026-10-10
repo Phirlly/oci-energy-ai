@@ -118,6 +118,32 @@ Packaging prints its SHA256 and refuses to overwrite an existing archive; choose
 a new output path when rerunning. Local state, credentials, test files and private
 documents are excluded. This command creates an archive only.
 
+### Download the configuration from GitHub
+
+While signed into GitHub, open a completed successful
+[Validate run](https://github.com/Phirlly/oci-energy-ai/actions/workflows/validate.yml).
+All three jobs must pass; an available artifact alone does not mean the entire
+run passed. Under **Artifacts**, download
+`terraform-<commit SHA>-attempt-<attempt number>` for the packaging attempt.
+Rerunning all jobs creates a separately named artifact. Artifacts expire after
+seven days; rerun validation when a fresh download is needed.
+
+Extract the downloaded GitHub archive to obtain `terraform.zip` and
+`terraform.zip.sha256`. From that directory, verify the inner Terraform ZIP:
+
+```sh
+# Linux
+sha256sum -c terraform.zip.sha256
+
+# macOS
+shasum -a 256 -c terraform.zip.sha256
+```
+
+The command should report `terraform.zip: OK`. The checksum file covers the
+inner ZIP; GitHub also displays a separate digest for its outer artifact.
+This is the Terraform configuration foundation, not a deployed application
+or a complete demo release.
+
 Deployment inputs are `deployment_id` (3–32 lowercase letters, digits or hyphens,
 starting with a letter and ending with a letter or digit), `region` and an OC1
 `compartment_ocid`. Syntactic checks do not prove service availability or IAM

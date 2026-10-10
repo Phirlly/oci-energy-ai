@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   python:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -25,9 +25,23 @@ jobs:
       - run: python -m energy_ai baseline
       - run: python -m energy_ai scenario --power-kw 25 --capacity-kwh 100 --target-kw 80
       - run: python -m deployment.terraform_bundle --output dist/terraform.zip
+      - name: Write and verify Terraform checksum
+        working-directory: dist
+        run: |
+          sha256sum terraform.zip > terraform.zip.sha256
+          sha256sum -c terraform.zip.sha256
+      - name: Upload Terraform configuration
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: terraform-${{ github.sha }}-attempt-${{ github.run_attempt }}
+          path: |
+            dist/terraform.zip
+            dist/terraform.zip.sha256
+          if-no-files-found: error
+          retention-days: 7
 
   terraform:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     strategy:
       fail-fast: false
@@ -40,7 +54,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
-      - uses: hashicorp/setup-terraform@5e8dbf3c6d9deaf4193ca7a8fb23f2ac83bb6c85 # v4.0.0
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
           terraform_version: ${{ matrix.version }}
           terraform_wrapper: false
