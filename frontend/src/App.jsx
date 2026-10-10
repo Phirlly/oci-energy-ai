@@ -37,6 +37,9 @@ export default function App() {
   }
   function install(value) {
     setDocs(current => [...current.filter(item => item.id !== value.id), value]);
+    if (value.approved_revision !== value.revision) {
+      setChecked(current => current.filter(id => id !== value.id));
+    }
     setSelected(value.id); setDraft(structuredClone(value.facts)); setDirty(false); setResult(null);
   }
   useEffect(() => {

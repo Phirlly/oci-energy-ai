@@ -3,7 +3,7 @@ import React from 'react';
 const fields = [
   ['supplier', 'Supplier'], ['account', 'Full account identity'], ['meter', 'Meter identity'],
   ['period_start', 'Start date', 'date'], ['period_end', 'End date', 'date'],
-  ['days', 'Billed days', 'number'], ['consumption', 'Consumption (kWh)', 'text'],
+  ['days', 'Billed days', 'number'], ['consumption', 'Consumption', 'text'],
   ['current_total', 'Current electricity charges', 'text'], ['currency', 'Currency'],
   ['unit', 'Usage unit']
 ];
@@ -33,6 +33,7 @@ export default function BillEditor({ doc, draft, dirty, busy, providers, models,
         {doc.approved_revision === doc.revision && !dirty ? 'Approved' : 'Needs review'}
       </span></div>
     <p className="muted">Check dates, units and charges against the source. Blank means unknown.
+      Keep consumption in the bill’s stated usage unit.
       Monthly totals cannot establish peak demand or battery savings.</p>
     <div className="ai-panel">
       {providers.length ? <>
