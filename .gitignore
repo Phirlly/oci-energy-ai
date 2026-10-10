@@ -67,6 +67,9 @@ __pycache__/
 
 # Node local state.
 node_modules/
+/frontend/dist/
+/frontend/test-results/
+/frontend/playwright-report/
 .next/
 .nuxt/
 .turbo/

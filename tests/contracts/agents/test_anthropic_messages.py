@@ -19,6 +19,20 @@ def response_body(content, stop_reason="end_turn"):
 
 
 class AnthropicMessagesTests(unittest.IsolatedAsyncioTestCase):
+    async def test_text_only_extraction_omits_tool_configuration(self):
+        from energy_ai.bills.extraction import extract_bill
+        from tests.fixtures.bills import candidate, TEXT
+        requests = []
+        def respond(request):
+            requests.append(json.loads(request.content))
+            return httpx.Response(200, json=response_body([
+                {"type": "text", "text": json.dumps(candidate())}]))
+        async with open_model("anthropic", api_key="fixture-key", transport=httpx.MockTransport(respond)) as model:
+            result = await extract_bill(model, [TEXT])
+        self.assertEqual(result.requests, 1)
+        self.assertNotIn("tool_choice", requests[0])
+        self.assertNotIn("tools", requests[0])
+
     @patch.dict("os.environ", {"ANTHROPIC_AUTH_TOKEN": "unrelated-token",
                                "ANTHROPIC_BASE_URL": "https://untrusted.invalid"})
     async def test_native_messages_round_trip_preserves_tool_schema_id_and_result(self):

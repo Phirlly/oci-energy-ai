@@ -5,6 +5,10 @@ description = "Electricity bill and battery scenario tools for an OCI demonstrat
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "anthropic==1.13.0",
+    "fastapi==0.143.0",
+    "pydantic==2.14.0",
+    "pypdf==6.20.0",
+    "uvicorn==0.54.0",
     "httpx==0.28.1",
     "httpx2==2.13.1",
     "oci==2.184.2",

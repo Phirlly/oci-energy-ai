@@ -1,151 +1,139 @@
 # OCI Energy AI
 
-A reusable electricity-bill and battery-scenario demo for OCI.
-**Available today:** offline calculations, Terraform foundation workflows and
-GitHub model/tool verification. Bill uploads and the browser application are pending.
+An OCI demo for reviewing electricity bills and exploring battery scenarios.
+The **local browser app** supports bill upload, optional AI extraction, human
+review and deterministic insights. Terraform foundation and hosted model checks
+are available; the public OCI application deployment is still being built.
 
-## Quick start
+## Try bill review
 
-From the repository root, use **Python 3.12**. No packages, credentials or network
-access are needed:
+Use **Python 3.12**, **Node 26.10.0** and [uv](https://docs.astral.sh/uv/getting-started/installation/).
+From the repository root:
+
+```sh
+uv sync --locked --no-dev
+cd frontend
+npm ci --ignore-scripts --registry=https://registry.npmjs.org
+npm run build
+cd ..
+uv run --no-sync python -m energy_ai.web
+```
+
+Open the printed localhost URL and enter its launch code. Choose **Try the
+example**, review the fictional bill, approve it and calculate insights. No
+model key is needed for this flow.
+
+Upload one bill or up to 12 bills. Each must be an unencrypted text PDF, at most
+4 MiB and 20 nonempty text pages; scanned bills need OCR first. Review actual
+service dates, billed days, consumption, currency and current electricity charges.
+Previous balances and fees already included in another charge must not be added
+again. Approve each bill, then select compatible bills for combined insights.
+
+Results include usage per day, supplied-period totals, average billed cost per
+kWh and charge reconciliation. Missing facts leave affected metrics unavailable.
+Overlaps, account differences and gaps are explicit; supplied bills are never
+silently treated as a complete year. Bills alone cannot establish interval peaks
+or precise battery savings.
+
+**Optional AI:** server environment variables `OPENAI_API_KEY` and
+`ANTHROPIC_API_KEY` enable those providers. Local OCI access requires explicit
+`OCI_PROFILE`, `OCI_REGION` and `OCI_GENAI_PROJECT` settings and model permissions.
+Optional `OCI_MODEL`, `OPENAI_MODEL`, `ANTHROPIC_MODEL` override model IDs. The UI
+shows the selected model and asks before sending extracted text, including
+identifiers. AI proposes facts with exact source quotes; you review them before
+calculation. GitHub secrets are used by hosted checks, not downloaded to this app.
+
+This presenter binds to `127.0.0.1` with one worker. Work stays in process memory
+for a fixed 30-minute session and is discarded on sign-out, expiry or restart;
+original PDF bytes are discarded after parsing. Do not expose it publicly.
+Linux parsing has a hard address-space limit; macOS uses a soft RSS watchdog
+that needs process-inspection permission. Public HTTPS hosting, Vault delivery
+and persistent runs are pending.
+
+## Explore the office battery example
+
+The separate offline CLI needs only Python 3.12:
 
 ```sh
 python -m energy_ai baseline
 python -m energy_ai scenario --power-kw 25 --capacity-kwh 100 --target-kw 80
 ```
 
-Both commands print JSON with monetary amounts in USD. The prepared example uses
-June 2018 public **modeled** office readings and an **invented tariff**: $0.18/kWh,
-$20/kW monthly peak demand and a $75 fixed fee.
-See [sample provenance and files](examples/monthly-office/README.md).
+The [public modeled office month](examples/monthly-office/README.md) uses June
+2018 readings and an invented USD tariff. Baseline: **$6,710.80**; a 25 kW /
+100 kWh, 90%-efficient battery gives **$6,344.11**, including charging losses.
+The $366.69 difference is a hindsight operating-cost scenario, excluding equipment
+cost and degradation.
 
-| Result | Baseline | Battery scenario |
-| --- | ---: | ---: |
-| Electricity use | 25,924.38 kWh | 25,939.48 kWh |
-| Peak demand | 98.47 kW | 80.00 kW |
-| Modeled bill | **$6,710.80** | **$6,344.11** |
+For your own readings, supply one complete calendar month with consecutive,
+unique, unzoned 15-minute endpoints and CSV columns `interval_end,energy_kwh`.
+Each value covers the preceding 15 minutes; maximum file size is 10 MiB.
+Timezone/DST repair is unsupported. Copy the example
+[tariff](examples/monthly-office/tariff.json), then pass
+`--intervals uploads/readings.csv --tariff uploads/tariff.json` to either command.
+This interval calculator supports the documented flat USD tariff, independently
+of uploaded-bill analysis.
 
-The 25 kW / 100 kWh battery uses 90% round-trip efficiency, includes charging
-losses and starts and ends empty within numeric tolerance. The $366.69 difference
-is an illustrative operating-cost result. This hindsight scenario excludes
-equipment cost and degradation; it is not an investment return or real-time
-controller. Check `target_achieved` when changing battery settings.
+## GitHub / OCI setup
 
-## Use your own readings
+1. Create the GitHub environment **demo**. Restrict its deployment branches to
+   `dev` and `main` before adding credentials. Forks need their own settings and
+   Actions enabled.
+2. Add these environment settings:
 
-Supply one complete calendar month of 15-minute energy readings with these exact
-CSV columns:
-
-```csv
-interval_end,energy_kwh
-2018-06-01T00:15:00,2.5
-2018-06-01T00:30:00,2.8
-```
-
-Each value covers the preceding 15 minutes. Endpoints run from the first day's
-00:15 through the next month's first day at 00:00. Timestamps must be consecutive,
-unique and unzoned; timezone conversion and DST repair are unsupported. Energy
-must be finite and nonnegative. Maximum CSV size: 10 MiB.
-
-Copy [tariff.json](examples/monthly-office/tariff.json), adjust its rates, then run:
-
-```sh
-python -m energy_ai baseline --intervals uploads/readings.csv --tariff uploads/tariff.json
-```
-
-Use the same file options with `scenario` for battery calculations. Only the flat
-USD calendar-month tariff is supported; taxes, tiers, time-of-use rates and demand
-ratchets are excluded. Bill PDFs and annual bill analysis are pending. Monthly
-bill totals alone cannot establish interval peaks or precise battery savings.
-
-## GitHub setup
-
-GitHub runs the setup and Terraform foundation workflows. No local Python,
-`.env` or OCI profile is required. Use an OCI identity with target-compartment
-[Resource Manager permissions](https://docs.oracle.com/en-us/iaas/Content/Identity/Reference/resourcemanagerpolicyreference.htm)
-and permission to manage the bucket and
-[Generative AI project](https://docs.oracle.com/en-us/iaas/Content/generative-ai/project-permissions.htm).
-Confirm the selected region supports projects; IAM and quotas require live verification.
-
-1. In your repository, open **Settings → Environments → New environment** and
-   create `demo`. Before adding credentials, restrict **Deployment branches and
-   tags** to selected branches `dev` and `main`, using branch rules.
-2. Add the environment variables and secrets below. All variables are required.
-   Variables are nonsecret metadata; put keys only in **secrets**, never in
-   variables, source files or Terraform inputs.
-
-| Environment setting | Type | Value |
+| Setting | Type | Purpose |
 | --- | --- | --- |
-| `DEPLOYMENT_ID` | Variable | Unique name: 3–32 lowercase letters, digits or hyphens; first character a letter, last alphanumeric |
-| `OCI_REGION` | Variable | Target OCI commercial region |
-| `OCI_COMPARTMENT_OCID` | Variable | Target compartment OCID, not its display name |
-| `OCI_TENANCY_OCID` | Variable | Deployment identity's tenancy OCID |
-| `OCI_USER_OCID` | Variable | Deployment identity's user OCID |
-| `OCI_FINGERPRINT` | Variable | Fingerprint of that user's registered API signing key |
-| `OCI_PRIVATE_KEY` | Secret | Required: matching PEM private key |
-| `OCI_PRIVATE_KEY_PASSPHRASE` | Secret | Required only for an encrypted private key |
-| `OPENAI_API_KEY` | Secret | Optional OpenAI key |
-| `ANTHROPIC_API_KEY` | Secret | Optional Anthropic key |
+| `DEPLOYMENT_ID` | Variable | Unique 3–32 lowercase letters/digits/hyphens; starts with a letter, ends alphanumeric |
+| `OCI_REGION` | Variable | Target commercial region |
+| `OCI_COMPARTMENT_OCID` | Variable | Target compartment OCID |
+| `OCI_TENANCY_OCID` | Variable | Deployment tenancy |
+| `OCI_USER_OCID` | Variable | Deployment user |
+| `OCI_FINGERPRINT` | Variable | Registered signing-key fingerprint |
+| `OCI_PRIVATE_KEY` | Secret | Matching PEM signing key |
+| `OCI_PRIVATE_KEY_PASSPHRASE` | Secret | Only for an encrypted key |
+| `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` | Secrets | Optional external providers |
 
-3. Open **Actions → Check deployment setup → Run workflow**, select `dev` or a
-   validated `main`, and inspect the summary. Forks need Actions enabled and their
-   own settings. The workflow must exist on the repository's default branch.
-4. After validation passes for that commit, run **Bootstrap OCI foundation** with
-   `apply` on the same branch. It creates or updates the owned Resource Manager
-   stack, waits for its plan, then applies that exact plan. Logs report recovery
-   IDs and the bucket, namespace and project outputs. This creates the foundation;
-   it does not launch the application or test models.
-5. Run **Verify model tool calls** with `configured` to check OCI and supplied
-   OpenAI/Anthropic keys, or select one provider. It reads the existing foundation
-   and sends only the public sample question and calculation results. Passing
-   requires actual tool execution and the expected amounts above. A configured
-   provider failure fails the workflow; absent optional keys are reported as skipped.
+3. Run **Check deployment setup** on `dev` or validated `main`. This checks formats
+   and presence, not live permissions. Custom GitHub App deployment protection
+   rules are incompatible with this check.
+4. After **Validate** passes, run **Bootstrap OCI foundation → apply** on the same
+   commit. Terraform runs through OCI Resource Manager and creates the owned
+   private bucket and GenAI project. It does not launch the application.
+5. Run **Verify model tool calls → configured**. It checks real calculation-tool
+   execution and generic extraction of invented public bills through OCI and
+   configured external providers. Configured failures fail the run; missing
+   optional keys are explicitly skipped. No personal bills are submitted.
 
-A passing configuration check verifies formats and secret presence only.
-OpenAI/Anthropic keys are optional and unused by bootstrap. Vault delivery for the
-future OCI application is pending. Custom GitHub App deployment protection rules
-are incompatible with the configuration check; branch restrictions are supported.
+The deployment identity needs
+[Resource Manager permissions](https://docs.oracle.com/en-us/iaas/Content/Identity/Reference/resourcemanagerpolicyreference.htm),
+bucket management and
+[GenAI project permissions](https://docs.oracle.com/en-us/iaas/Content/generative-ai/project-permissions.htm).
+Model checks also need
+[OCI Responses access](https://docs.oracle.com/en-us/iaas/Content/generative-ai/get-started-agents.htm)
+and incur provider charges. Defaults: OCI `google.gemini-2.5-flash` (externally
+hosted through OCI in Ashburn), OpenAI `gpt-4.1-mini-2025-04-14`, Anthropic
+`claude-haiku-5-5`. Optional GitHub variables `OCI_MODEL`, `OPENAI_MODEL` and
+`ANTHROPIC_MODEL` select alternatives, which need their own successful check.
+There is no automatic fallback. Raw model responses and traces are not published.
 
-Model checks incur provider usage charges and require model access, including
-[OCI Responses permissions](https://docs.oracle.com/en-us/iaas/Content/generative-ai/get-started-agents.htm).
-Defaults are
-OCI `google.gemini-2.5-flash` (externally hosted through OCI in Ashburn), OpenAI
-`gpt-4.1-mini-2025-04-14` and Anthropic `claude-haiku-5-5`. Optional environment
-variables `OCI_MODEL`, `OPENAI_MODEL` and `ANTHROPIC_MODEL` select compatible models;
-there is no automatic fallback. Another region/model requires its own successful
-check. Each analysis is limited to 120 seconds, four model turns, two tool calls
-and 2,048 output tokens per request. Raw responses and traces are not published.
+Keep one owning repository per deployment ID and its region/compartment fixed.
+On timeout, inspect the logged Resource Manager job; it may still be running.
+Wait before rerunning. To remove resources, run **Bootstrap OCI foundation →
+destroy** and confirm the exact deployment ID. This retains the empty stack and
+never purges bucket contents; a nonempty bucket blocks cleanup. Application
+deployment, update and rollback remain pending.
 
-## Foundation recovery and cleanup
-
-The private bucket and GenAI project may incur OCI charges when used. Keep one
-owning repository per deployment ID; forked installations need distinct IDs.
-Keep its region and compartment fixed. Workflow runs serialize within a repository;
-do not modify its stack concurrently through another repository or the Console.
-
-On failure or timeout, inspect the logged stack/job in OCI Resource Manager.
-The remote job may still be running. Wait for it to finish before rerunning
-`apply`; the workflow refuses active jobs and preserves state for recovery.
-
-To remove the foundation, run the same workflow with `destroy` and enter the exact
-`DEPLOYMENT_ID` as confirmation. It removes managed resources, retains the empty
-stack and never purges bucket contents. A nonempty bucket blocks cleanup; review
-and remove its data separately, then retry. Application update/rollback is pending.
-
-Successful [Validate runs](https://github.com/Phirlly/oci-energy-ai/actions/workflows/validate.yml)
-also publish a configuration-only Terraform ZIP and SHA256 checksum for seven days.
-Use artifacts only after all three jobs pass.
-
-## Tests and private data
-
-With Python 3.12 and [uv](https://docs.astral.sh/uv/getting-started/installation/),
-install the locked dependencies and run the offline suite:
+## Validation and private data
 
 ```sh
-uv sync --locked --no-dev
 uv run --no-sync python -m unittest discover -s tests -t . -v
+cd frontend
+npx --no-install playwright install chromium
+npm test
 ```
 
-Keep private inputs under Git-ignored `uploads/`. Never commit bills, API keys or
-Terraform state. The calculation CLI runs locally and prints results without
-making model or cloud calls.
+Browser tests use invented data and a test-only scripted provider. Hosted model
+checks prove live provider access separately. Keep private files in ignored
+`uploads/`; never commit bills, credentials, logs or Terraform state. Corporate
+networks may require a trusted CA bundle for package downloads; keep TLS
+verification enabled.

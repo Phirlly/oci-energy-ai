@@ -92,7 +92,8 @@ class AnthropicMessagesModel(Model):
             choice["disable_parallel_tool_use"] = True
         response = await self.client.messages.create(
             model=self.model, messages=to_messages(input), system=system_instructions or "",
-            tools=definitions, tool_choice=choice, max_tokens=model_settings.max_tokens or 2048,
+            **({"tools": definitions, "tool_choice": choice} if definitions else {}),
+            max_tokens=model_settings.max_tokens or 2048,
             thinking={"type": "disabled"}, output_config={"effort": "low"},
             timeout=model_settings.timeout or 60,
         )

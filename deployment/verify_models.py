@@ -19,16 +19,21 @@ GUIDANCE = {
 }
 
 
+def provider_options(provider, environment):
+    options = {"model_id": environment.get(f"{provider.upper()}_MODEL") or None}
+    if provider == "oci":
+        options.update(load_oci_model_context(environment))
+    else:
+        options["api_key"] = environment.get(f"{provider.upper()}_API_KEY")
+        if not isinstance(options["api_key"], str) or not options["api_key"].strip():
+            raise ValueError("Provider key is required.")
+    return options
+
+
 async def verify_provider(provider, environment):
     started = time.monotonic()
     try:
-        options = {"model_id": environment.get(f"{provider.upper()}_MODEL") or None}
-        if provider == "oci":
-            options.update(load_oci_model_context(environment))
-        else:
-            options["api_key"] = environment.get(f"{provider.upper()}_API_KEY")
-            if not isinstance(options["api_key"], str) or not options["api_key"].strip():
-                raise ValueError("Provider key is required.")
+        options = provider_options(provider, environment)
         async with open_model(provider, **options) as model:
             result = await analyze_sample(model)
         return {
@@ -50,14 +55,15 @@ async def verify_provider(provider, environment):
     return {"provider": provider, "status": "failed", "category": category, "guidance": guidance}
 
 
-async def verify_selected(selection, environment):
+async def verify_selected(selection, environment, *, check=None):
+    check = check or verify_provider
     results = []
     for provider in DEFAULT_MODELS if selection == "configured" else [selection]:
         key = environment.get(f"{provider.upper()}_API_KEY")
         if selection == "configured" and provider != "oci" and (key is None or isinstance(key, str) and not key.strip()):
             results.append({"provider": provider, "status": "skipped", "reason": "API key not configured."})
         else:
-            results.append(await verify_provider(provider, environment))
+            results.append(await check(provider, environment))
     return results
 
 

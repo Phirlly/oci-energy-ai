@@ -21,7 +21,7 @@ jobs:
   models:
     if: github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 20
     environment:
       name: demo
     steps:
@@ -55,4 +55,6 @@ jobs:
           OCI_MODEL: ${{ vars.OCI_MODEL }}
           OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
           ANTHROPIC_MODEL: ${{ vars.ANTHROPIC_MODEL }}
-        run: uv run --no-sync python -m deployment.verify_models --provider "$MODEL_PROVIDER"
+        run: |
+          uv run --no-sync python -m deployment.verify_models --provider "$MODEL_PROVIDER"
+          uv run --no-sync python -m deployment.verify_bills --provider "$MODEL_PROVIDER"
