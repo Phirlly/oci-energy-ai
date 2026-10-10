@@ -1,0 +1,9 @@
+[project]
+name = "oci-energy-ai"
+version = "0.1.0"
+description = "Electricity bill and battery scenario tools for an OCI demonstration"
+requires-python = ">=3.12,<3.13"
+dependencies = []
+
+[tool.uv]
+package = false

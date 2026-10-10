@@ -1,0 +1,22 @@
+{
+  "name": "Modeled New York medium office — June 2018",
+  "source": "DOE/NREL End-Use Load Profiles, ComStock AMY2018 release 1 (2021)",
+  "publication_url": "https://data.openei.org/submissions/4520",
+  "source_url": "https://oedi-data-lake.s3.amazonaws.com/nrel-pds-building-stock/end-use-load-profiles-for-us-building-stock/2021/comstock_amy2018_release_1/timeseries_individual_buildings/by_county/upgrade=0/county=G3600610/2083-0.parquet",
+  "source_sha256": "4034a10c35cf02640b862b18098f74bd9ef6c9a908d4217dbb6d616903254c4a",
+  "license": "CC BY 4.0",
+  "license_url": "https://creativecommons.org/licenses/by/4.0/",
+  "building_id": 2083,
+  "building_type": "MediumOffice",
+  "area_sqft": 37500,
+  "state": "NY",
+  "county_id": "G3600610",
+  "interval_minutes": 15,
+  "timestamp_convention": "interval ending",
+  "clock": "Unzoned source simulation clock; no civil timezone or DST conversion applied.",
+  "period_start": "2018-06-01",
+  "period_end_exclusive": "2018-07-01",
+  "interval_count": 2880,
+  "transformation": "Selected June and total electricity kWh; renamed columns; retained source float values as decimal strings.",
+  "notice": "Public modeled profile, not measured customer data. Tariff and bill are illustrative demo artifacts."
+}

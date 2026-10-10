@@ -1,0 +1,8 @@
+{
+  "kind": "illustrative_flat_monthly",
+  "currency": "USD",
+  "energy_usd_per_kwh": "0.18",
+  "demand_usd_per_kw": "20.00",
+  "fixed_usd_per_month": "75.00",
+  "notice": "Invented demo tariff; flat energy, monthly maximum 15-minute demand and fixed charge. No tax, TOU or demand ratchets."
+}

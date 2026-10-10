@@ -1,0 +1,10 @@
+{
+  "period_start": "2018-06-01",
+  "period_end_exclusive": "2018-07-01",
+  "energy_kwh": "25924.3785746685796547",
+  "peak_kw": "98.4702504786728",
+  "energy_charge_usd": "4666.39",
+  "demand_charge_usd": "1969.41",
+  "fixed_charge_usd": "75.00",
+  "total_usd": "6710.80"
+}
