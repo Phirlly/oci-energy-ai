@@ -48,7 +48,7 @@ async def open_model(provider, *, api_key=None, model_id=None, oci_region=None,
     if provider == "anthropic":
         async with httpx2.AsyncClient(timeout=httpx2.Timeout(60, connect=10), transport=transport,
                                       follow_redirects=False, trust_env=False) as http:
-            async with AsyncAnthropic(api_key=api_key, auth_token="", base_url="https://api.anthropic.com",
+            async with AsyncAnthropic(api_key=api_key, base_url="https://api.anthropic.com",
                                       max_retries=0, timeout=60, http_client=http) as client:
                 yield AnthropicMessagesModel(client, model_id)
     else:

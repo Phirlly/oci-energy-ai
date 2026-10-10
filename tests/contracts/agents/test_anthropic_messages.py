@@ -1,5 +1,6 @@
 import json
 import unittest
+from unittest.mock import patch
 
 import httpx2 as httpx
 from agents import ModelSettings
@@ -18,6 +19,8 @@ def response_body(content, stop_reason="end_turn"):
 
 
 class AnthropicMessagesTests(unittest.IsolatedAsyncioTestCase):
+    @patch.dict("os.environ", {"ANTHROPIC_AUTH_TOKEN": "unrelated-token",
+                               "ANTHROPIC_BASE_URL": "https://untrusted.invalid"})
     async def test_native_messages_round_trip_preserves_tool_schema_id_and_result(self):
         requests = []
 
@@ -35,6 +38,7 @@ class AnthropicMessagesTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.model_requests, 2)
         self.assertEqual(str(requests[0].url), "https://api.anthropic.com/v1/messages")
         self.assertEqual(requests[0].headers["x-api-key"], "fixture-key")
+        self.assertNotIn("authorization", requests[0].headers)
         first, second = [json.loads(request.content) for request in requests]
         self.assertEqual(first["model"], "claude-haiku-5-5")
         self.assertEqual(first["thinking"], {"type": "disabled"})
