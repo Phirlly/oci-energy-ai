@@ -2,8 +2,8 @@
 
 A reusable electricity-bill and battery-scenario demo for OCI.
 **Available today:** offline calculations, a GitHub configuration check and
-Terraform foundation workflows. Live provisioning verification, agents, bill
-uploads and the browser application are pending.
+Terraform foundation workflows. Agents, bill uploads and the browser application
+are pending.
 
 ## Quick start
 
