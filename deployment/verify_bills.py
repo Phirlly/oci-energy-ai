@@ -2,6 +2,8 @@
 
 import argparse
 import asyncio
+from datetime import date
+from decimal import Decimal
 import json
 import logging
 import os
@@ -14,10 +16,16 @@ from energy_ai.bills.extraction import ExtractionError, extract_bill
 from energy_ai.bills.insights import summarize
 
 
+class ExpectedFactsError(ValueError):
+    def __init__(self, fields):
+        self.fields = sorted(fields)
+        super().__init__("Independent fixture comparison failed.")
+
+
 def check_facts(facts, index):
     if index == 2:
         if facts.service != "water" or summarize([facts])["bills"][0]["daily_kwh"] is not None:
-            raise ValueError("Non-electric classification failed.")
+            raise ExpectedFactsError(["non_electric_classification"])
         return
     expected = (
         dict(start="2024-02-01", end="2024-03-01", days=29, kwh=580, total="91.50", daily="20.00",
@@ -25,18 +33,21 @@ def check_facts(facts, index):
         dict(start="2024-04-10", end="2024-05-10", days=30, kwh=900, total="129.15", daily="30.00",
              supplier="Cedar Municipal Utilities", account="SAMPLE-B82", meter="LAB-001"),
     )[index]
-    from decimal import Decimal
-    if (facts.service != "electricity" or facts.usage_kind != "consumption" or facts.unit != "kWh"
-            or facts.currency != "USD" or any(getattr(facts, name) != expected[name] for name in ("supplier", "account", "meter"))
-            or str(facts.period_start) != expected["start"] or str(facts.period_end) != expected["end"]
-            or facts.days != expected["days"] or facts.consumption != expected["kwh"]
-            or facts.current_total != Decimal(expected["total"])):
-        raise ValueError("Independent fact comparison failed.")
+    expected_fields = dict(service="electricity", usage_kind="consumption", unit="kWh", currency="USD",
+                           period_start=date.fromisoformat(expected["start"]),
+                           period_end=date.fromisoformat(expected["end"]), days=expected["days"],
+                           consumption=expected["kwh"], current_total=Decimal(expected["total"]),
+                           **{name: expected[name] for name in ("supplier", "account", "meter")})
+    different = [name for name, value in expected_fields.items() if getattr(facts, name) != value]
+    if different:
+        raise ExpectedFactsError(different)
     insight = summarize([facts])["bills"][0]
-    if insight["daily_kwh"] != expected["daily"] or insight["charge_difference"] != "0.00":
-        raise ValueError("Independent arithmetic comparison failed.")
+    different = [name for name, value in dict(daily_kwh=expected["daily"], charge_difference="0.00").items()
+                 if insight[name] != value]
+    if different:
+        raise ExpectedFactsError(different)
     if index == 0 and not any(charge.role == "included" and charge.amount == 12 for charge in facts.charges):
-        raise ValueError("Included-fee classification failed.")
+        raise ExpectedFactsError(["included_fee"])
 
 
 async def verify_bill_provider(provider, environment):
@@ -56,9 +67,14 @@ async def verify_bill_provider(provider, environment):
         return dict(provider=provider, status="passed", checks=checks,
                     elapsed_seconds=round(time.monotonic() - started, 2))
     except Exception as error:
+        diagnostics = None
+        if isinstance(error, ExtractionError):
+            diagnostics = error.diagnostics
+        elif isinstance(error, ExpectedFactsError):
+            diagnostics = dict(fields=error.fields)
         return dict(provider=provider, status="failed", completed_checks=len(checks),
                     stage="extraction_" + error.category if isinstance(error, ExtractionError) else stage,
-                    diagnostics=error.diagnostics if isinstance(error, ExtractionError) else None,
+                    diagnostics=diagnostics,
                     guidance="Public bill extraction or expected-fact check failed; raw details suppressed.")
 
 
