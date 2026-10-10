@@ -11,6 +11,14 @@ _PATTERNS = {
 }
 
 
+def validate_deployment_value(name, value):
+    """Validate one Terraform input without including its value in errors."""
+    if name not in _PATTERNS:
+        raise ValueError("Unknown deployment input.")
+    if not isinstance(value, str) or not re.fullmatch(_PATTERNS[name], value):
+        raise ValueError(f"Invalid {name}; see deployment input requirements.")
+
+
 @dataclass(frozen=True)
 class DeploymentConfiguration:
     deployment_id: str
@@ -18,10 +26,8 @@ class DeploymentConfiguration:
     compartment_ocid: str
 
     def __post_init__(self):
-        for name, pattern in _PATTERNS.items():
-            value = getattr(self, name)
-            if not isinstance(value, str) or not re.fullmatch(pattern, value):
-                raise ValueError(f"Invalid {name}; see deployment input requirements.")
+        for name in _PATTERNS:
+            validate_deployment_value(name, getattr(self, name))
 
     @classmethod
     def from_mapping(cls, values):

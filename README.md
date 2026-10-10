@@ -149,6 +149,70 @@ starting with a letter and ending with a letter or digit), `region` and an OC1
 `compartment_ocid`. Syntactic checks do not prove service availability or IAM
 permissions. The full deployment instructions will accompany the runnable service.
 
+## GitHub deployment setup
+
+GitHub Actions is the intended entry point for deploying this demo. The
+**configuration check is available now**; automated provisioning, application
+deployment, update, rollback and cleanup are still pending. You do not need a
+local `.env`, Python installation or local OCI profile to run this check.
+
+In your copy of this repository:
+
+1. Open **Settings → Environments**, create an environment named `demo`, and set
+   **Deployment branches and tags** to selected branches: `dev` and `main`
+   (branch rules, not tag rules). Configure it before adding credentials.
+2. Add the following **environment variables**. These are nonsecret metadata;
+   GitHub may display variable values in Actions logs.
+
+| Variable | Value to supply |
+| --- | --- |
+| `DEPLOYMENT_ID` | Your unique demo name, following the Terraform input rules above |
+| `OCI_REGION` | Your target OCI commercial region |
+| `OCI_COMPARTMENT_OCID` | Target compartment OCID, not its display name |
+| `OCI_TENANCY_OCID` | Tenancy OCID for the deployment identity |
+| `OCI_USER_OCID` | User OCID for the deployment identity |
+| `OCI_FINGERPRINT` | Fingerprint of that user's registered OCI API signing key |
+
+3. Add these **environment secrets** through GitHub's settings. Never place key
+   values in variables, workflow inputs, source files or Terraform inputs.
+
+| Secret | Required? |
+| --- | --- |
+| `OCI_PRIVATE_KEY` | Yes: the matching OCI API signing private key in PEM format |
+| `OCI_PRIVATE_KEY_PASSPHRASE` | Only if that private key is encrypted |
+| `OPENAI_API_KEY` | Optional: for OpenAI access |
+| `ANTHROPIC_API_KEY` | Optional: for Anthropic access |
+
+Use an existing OCI deployment identity approved for the target compartment, or
+have an administrator prepare the required IAM permissions. The complete permission
+and provisioning instructions will accompany the deployment workflow. The OCI
+signing key authenticates deployment operations; it is separate from the optional
+model-provider keys. A workstation profile name is not a GitHub credential.
+
+4. Open **Actions → Check deployment setup → Run workflow**, select `dev` (or a
+   validated `main`), and inspect the run summary. The workflow must exist on your
+   repository's default branch to appear in the manual-run UI. In a fork, enable
+   Actions and configure your own environment; credentials are not supplied by
+   this repository.
+
+Missing or malformed required settings fail together with their names and
+correction guidance. A passing result means identifier formats were accepted and
+the required secret was supplied. Keys are checked for presence only: their
+contents, passphrase requirements, authentication, IAM, quotas and model access
+are **not validated**. Optional providers show `not_configured` or
+`supplied_unverified`; omitting both allows OCI-only configuration. No OCI
+resources, model calls, Vault writes or GitHub deployment records are produced.
+Custom GitHub App deployment protection rules are incompatible with this check's
+environment mode; the branch restrictions above are supported.
+
+The intended deployment then uses GitHub Actions to submit Terraform to OCI
+Resource Manager, write configured provider keys to OCI Vault secrets through a
+separate secret-management operation, and deploy the application. Raw provider
+keys must stay out of Terraform state. The OCI backend will retrieve them using
+its instance identity. Deployment smoke tests must prove a real model → tool →
+answer for every enabled provider before it is shown as ready. This lifecycle
+and runtime secret retrieval have not been implemented or verified yet.
+
 ## Privacy and current limits
 
 These local commands make no model or cloud calls and do not retain input files
