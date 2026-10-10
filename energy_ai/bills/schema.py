@@ -9,6 +9,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 Text = Annotated[str, Field(min_length=1, max_length=160)]
 Money = Annotated[Decimal, Field(ge=-1000000000, le=1000000000, max_digits=15, decimal_places=4)]
 Energy = Annotated[Decimal, Field(ge=0, le=1000000000, max_digits=15, decimal_places=4)]
+Days = Annotated[int, Field(strict=True, ge=1, le=366)]
+Currency = Annotated[str, Field(pattern=r"^[A-Z]{3}$")]
 
 
 class StrictModel(BaseModel):
@@ -30,8 +32,8 @@ class Facts(StrictModel):
     unit: Text | None = None
     period_start: date | None = None
     period_end: date | None = None
-    days: Annotated[int, Field(strict=True, ge=1, le=366)] | None = None
-    currency: Annotated[str, Field(pattern=r"^[A-Z]{3}$")] | None = None
+    days: Days | None = None
+    currency: Currency | None = None
     consumption: Energy | None = None
     current_total: Money | None = None
     charges: list[Charge] = Field(default_factory=list, max_length=40)

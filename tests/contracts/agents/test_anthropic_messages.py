@@ -21,12 +21,12 @@ def response_body(content, stop_reason="end_turn"):
 class AnthropicMessagesTests(unittest.IsolatedAsyncioTestCase):
     async def test_text_only_extraction_omits_tool_configuration(self):
         from energy_ai.bills.extraction import extract_bill
-        from tests.fixtures.bills import candidate, TEXT
+        from tests.fixtures.bills import proposal, TEXT
         requests = []
         def respond(request):
             requests.append(json.loads(request.content))
             return httpx.Response(200, json=response_body([
-                {"type": "text", "text": json.dumps(candidate())}]))
+                {"type": "text", "text": json.dumps(proposal())}]))
         async with open_model("anthropic", api_key="fixture-key", transport=httpx.MockTransport(respond)) as model:
             result = await extract_bill(model, [TEXT])
         self.assertEqual(result.requests, 1)

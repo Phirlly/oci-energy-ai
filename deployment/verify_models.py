@@ -32,6 +32,7 @@ def provider_options(provider, environment):
 
 async def verify_provider(provider, environment):
     started = time.monotonic()
+    diagnostics = {}
     try:
         options = provider_options(provider, environment)
         async with open_model(provider, **options) as model:
@@ -46,13 +47,17 @@ async def verify_provider(provider, environment):
         }
     except AnalysisError as error:
         category, guidance = error.category, str(error)
+        diagnostics = error.diagnostics
     except DeploymentError:
         category, guidance = "foundation", GUIDANCE["foundation"]
     except ValueError:
         category, guidance = "configuration", GUIDANCE["configuration"]
     except Exception:
         category, guidance = "unexpected", GUIDANCE["unexpected"]
-    return {"provider": provider, "status": "failed", "category": category, "guidance": guidance}
+    report = {"provider": provider, "status": "failed", "category": category, "guidance": guidance}
+    if diagnostics:
+        report["diagnostics"] = diagnostics
+    return report
 
 
 async def verify_selected(selection, environment, *, check=None):

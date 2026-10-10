@@ -28,6 +28,13 @@ def candidate():
                      for i in range(len(FACTS["charges"]))})
     return {"facts": deepcopy(FACTS), "evidence": evidence}
 
+def proposal(text=TEXT):
+    from copy import deepcopy
+    def sourced(value):
+        return {"value": deepcopy(value), "evidence": {"page": 1, "quote": text}}
+    return {name: [sourced(row) for row in value] if name == "charges" else sourced(value)
+            for name, value in FACTS.items()}
+
 def pdf_bytes(text=TEXT, *, pages=1, encrypted=False):
     from io import BytesIO
     from pypdf import PdfWriter

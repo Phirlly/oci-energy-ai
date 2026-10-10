@@ -6,6 +6,7 @@ import unittest
 from unittest.mock import patch
 
 from deployment.verify_models import main
+from energy_ai.agents.analysis import AnalysisError
 from tests.fixtures.agent_responses import ScriptedModel, message, tool_call
 
 
@@ -79,3 +80,25 @@ class VerifyModelsCliTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertNotIn("private-marker", str(report) + errors)
         self.assertEqual(logging.root.manager.disable, old)
+
+    @patch("deployment.verify_models.open_model")
+    def test_verification_diagnostics_expose_only_stage_and_structural_boolean(self, factory):
+        @asynccontextmanager
+        async def opened(*args, **kwargs):
+            answer = message()
+            answer.content[0].text = "```json\nprivate-marker\n```"
+            yield ScriptedModel([[tool_call()], [answer]])
+        factory.side_effect = opened
+        code, report, errors = self.invoke("openai", {"OPENAI_API_KEY": "secret-marker"})
+        self.assertEqual(code, 1)
+        self.assertEqual(report["providers"][0]["category"], "verification")
+        self.assertEqual(report["providers"][0]["diagnostics"],
+                         {"stage": "answer_json", "opening_fence": True})
+        self.assertNotIn("marker", str(report) + errors)
+        for category, stage, fence in (("verification", "private-marker", True),
+                                       ("verification", "answer_facts", True),
+                                       ("verification", "answer_json", "private-marker"),
+                                       ("provider_error", "answer_json", True)):
+            error = AnalysisError(category, stage=stage, opening_fence=fence)
+            self.assertNotIn("marker", str(error.diagnostics))
+            self.assertNotIn("opening_fence", error.diagnostics)

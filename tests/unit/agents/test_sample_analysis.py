@@ -7,6 +7,7 @@ from agents.exceptions import ModelTimeoutError
 from anthropic import APITimeoutError as AnthropicTimeout
 import httpx2
 from openai import APITimeoutError as OpenAITimeout
+from agents import Runner
 
 from energy_ai.agents.analysis import AnalysisError, analyze_sample
 from tests.fixtures.agent_responses import ANSWER, ScriptedModel, message, tool_call
@@ -32,17 +33,61 @@ class SampleAnalysisTests(unittest.IsolatedAsyncioTestCase):
         trace.assert_not_called()
 
     async def test_answer_without_actual_tool_execution_fails(self):
-        with self.assertRaisesRegex(AnalysisError, "verification"):
+        with self.assertRaisesRegex(AnalysisError, "verification") as caught:
             await analyze_sample(ScriptedModel([[message()]]))
+        self.assertEqual(caught.exception.diagnostics, {"stage": "tool_evidence"})
 
-    async def test_mismatched_amount_invalid_json_or_missing_explanation_fails(self):
-        variants = [ANSWER | {"scenario_total_usd": "1.00"},
-                    ANSWER | {"baseline_total_usd": "NaN"}, ANSWER | {"explanation": ""},
-                    {"other": "private-marker"}]
-        for answer in variants:
+    async def test_mismatched_amount_or_missing_fields_fails_at_specific_stage(self):
+        variants = [(ANSWER | {"scenario_total_usd": "1.00"}, "answer_facts"),
+                    (ANSWER | {"baseline_total_usd": "NaN"}, "answer_facts"),
+                    (ANSWER | {"explanation": ""}, "answer_shape"),
+                    ({"other": "private-marker"}, "answer_shape")]
+        for answer, stage in variants:
             with self.subTest(answer=answer):
-                with self.assertRaisesRegex(AnalysisError, "verification"):
+                with self.assertRaisesRegex(AnalysisError, "verification") as caught:
                     await analyze_sample(ScriptedModel([[tool_call()], [message(answer)]]))
+                self.assertEqual(caught.exception.diagnostics, {"stage": stage})
+
+    async def test_actual_invalid_answer_json_reports_only_stage_and_fence_boolean(self):
+        for raw, fenced in (("{private-marker", False), ("```json\nprivate-marker\n```", True)):
+            answer = message()
+            answer.content[0].text = raw
+            with self.subTest(fenced=fenced), self.assertRaises(AnalysisError) as caught:
+                await analyze_sample(ScriptedModel([[tool_call()], [answer]]))
+            self.assertEqual(caught.exception.category, "verification")
+            self.assertEqual(caught.exception.diagnostics, dict(stage="answer_json", opening_fence=fenced))
+            self.assertNotIn("private-marker", str(caught.exception))
+
+    async def test_corrupt_tool_evidence_and_independent_calculation_have_distinct_stages(self):
+        original_run = Runner.run
+        for change in ("arguments", "output", "correlation", "calculation"):
+            async def tampered_run(*args, **kwargs):
+                result = await original_run(*args, **kwargs)
+                call = next(item.raw_item for item in result.new_items if item.type == "tool_call_item")
+                output = next(item.raw_item for item in result.new_items if item.type == "tool_call_output_item")
+                if change == "arguments":
+                    call.arguments = "{private-marker"
+                elif change == "output":
+                    output["output"] = "{private-marker"
+                elif change == "correlation":
+                    output["call_id"] = "private-marker"
+                else:
+                    report = kwargs["context"].executions[0].report
+                    report["baseline_bill"]["total_usd"] = "0.00"
+                    output["output"] = json.dumps(report)
+                return result
+            with self.subTest(change=change), patch("energy_ai.agents.analysis.Runner.run", side_effect=tampered_run):
+                with self.assertRaises(AnalysisError) as caught:
+                    await analyze_sample(ScriptedModel([[tool_call()], [message()]]))
+            stage = "sample_calculation" if change == "calculation" else "tool_evidence"
+            self.assertEqual(caught.exception.diagnostics, {"stage": stage})
+
+    async def test_runner_validation_failure_remains_verification_and_has_no_response_details(self):
+        with self.assertRaises(AnalysisError) as caught:
+            await analyze_sample(ScriptedModel([ValueError("private-marker")]))
+        self.assertEqual(caught.exception.category, "verification")
+        self.assertEqual(caught.exception.diagnostics, {"stage": "runner"})
+        self.assertNotIn("private-marker", str(caught.exception))
 
     async def test_wrong_scenario_and_unbounded_tool_loop_fail(self):
         for outputs in ([[tool_call(power_kw=0)], [message()]],

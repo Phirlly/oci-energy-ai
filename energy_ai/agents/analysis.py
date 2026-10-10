@@ -28,8 +28,15 @@ PROMPT = "Analyze the sample month with a 25 kW, 100 kWh battery, 0.9 round-trip
 class AnalysisError(Exception):
     """Fixed public categories; never include provider response bodies."""
 
-    def __init__(self, category):
+    def __init__(self, category, *, stage=None, opening_fence=None):
         self.category = category
+        self.diagnostics = {}
+        if category == "verification" and stage in {
+            "runner", "tool_evidence", "sample_calculation", "answer_json", "answer_shape", "answer_facts",
+        }:
+            self.diagnostics["stage"] = stage
+            if stage == "answer_json" and isinstance(opening_fence, bool):
+                self.diagnostics["opening_fence"] = opening_fence
         messages = {
             "verification": "Tool execution or numeric answer verification failed.",
             "timeout": "Model analysis exceeded its deadline.",
@@ -51,35 +58,45 @@ class VerifiedAnalysis:
 
 
 def _verify(result, context):
-    if not context.executions:
-        raise ValueError("No execution.")
-    calls = [item.raw_item for item in result.new_items if item.type == "tool_call_item"]
-    outputs = [item.raw_item for item in result.new_items if item.type == "tool_call_output_item"]
-    if len(calls) != len(context.executions) or len(outputs) != len(calls):
-        raise ValueError("Missing execution evidence.")
-    for execution in context.executions:
-        call = [item for item in calls if item.call_id == execution.call_id]
-        output = [item for item in outputs if item.get("call_id") == execution.call_id]
-        if (len(call) != 1 or len(output) != 1 or call[0].name != "analyze_energy"
-                or execution.parameters != PARAMETERS
-                or json.loads(call[0].arguments) != PARAMETERS
-                or json.loads(output[0]["output"]) != execution.report):
-            raise ValueError("Execution evidence differs.")
-        report = execution.report
-        actual = {"baseline_total_usd": report["baseline_bill"]["total_usd"],
-                  "scenario_total_usd": report["scenario_bill"]["total_usd"],
-                  "modeled_cost_difference_usd": report["modeled_cost_difference_usd"]}
-        if actual != EXPECTED:
-            raise ValueError("Independent sample regression.")
-    answer = json.loads(result.final_output)
-    if not isinstance(answer, dict) or set(answer) != set(EXPECTED) | {"explanation"}:
-        raise ValueError("Answer fields differ.")
-    for name, expected in EXPECTED.items():
-        value = answer[name]
-        if not isinstance(value, str) or len(value) > 32 or Decimal(value) != Decimal(expected):
-            raise ValueError("Answer amount differs.")
-    if not isinstance(answer["explanation"], str) or not 1 <= len(answer["explanation"].strip()) <= 4000:
-        raise ValueError("Explanation missing.")
+    stage = "tool_evidence"
+    try:
+        if not context.executions:
+            raise ValueError("No execution.")
+        calls = [item.raw_item for item in result.new_items if item.type == "tool_call_item"]
+        outputs = [item.raw_item for item in result.new_items if item.type == "tool_call_output_item"]
+        if len(calls) != len(context.executions) or len(outputs) != len(calls):
+            raise ValueError("Missing execution evidence.")
+        for execution in context.executions:
+            stage = "tool_evidence"
+            call = [item for item in calls if item.call_id == execution.call_id]
+            output = [item for item in outputs if item.get("call_id") == execution.call_id]
+            if (len(call) != 1 or len(output) != 1 or call[0].name != "analyze_energy"
+                    or execution.parameters != PARAMETERS
+                    or json.loads(call[0].arguments) != PARAMETERS
+                    or json.loads(output[0]["output"]) != execution.report):
+                raise ValueError("Execution evidence differs.")
+            stage = "sample_calculation"
+            report = execution.report
+            actual = {"baseline_total_usd": report["baseline_bill"]["total_usd"],
+                      "scenario_total_usd": report["scenario_bill"]["total_usd"],
+                      "modeled_cost_difference_usd": report["modeled_cost_difference_usd"]}
+            if actual != EXPECTED:
+                raise ValueError("Independent sample regression.")
+        stage = "answer_json"
+        answer = json.loads(result.final_output)
+        stage = "answer_shape"
+        if not isinstance(answer, dict) or set(answer) != set(EXPECTED) | {"explanation"}:
+            raise ValueError("Answer fields differ.")
+        if not isinstance(answer["explanation"], str) or not 1 <= len(answer["explanation"].strip()) <= 4000:
+            raise ValueError("Explanation missing.")
+        stage = "answer_facts"
+        for name, expected in EXPECTED.items():
+            value = answer[name]
+            if not isinstance(value, str) or len(value) > 32 or Decimal(value) != Decimal(expected):
+                raise ValueError("Answer amount differs.")
+    except (ValueError, KeyError, TypeError, ArithmeticError):
+        fenced = isinstance(result.final_output, str) and result.final_output.lstrip().startswith("```")
+        raise AnalysisError("verification", stage=stage, opening_fence=fenced) from None
     usage = result.context_wrapper.usage
     return VerifiedAnalysis(answer, len(calls), usage.requests, usage.input_tokens, usage.output_tokens)
 
@@ -99,8 +116,10 @@ async def analyze_sample(model, *, timeout=120):
             return _verify(result, context)
     except (TimeoutError, ModelTimeoutError, OpenAITimeout, AnthropicTimeout):
         raise AnalysisError("timeout") from None
+    except AnalysisError:
+        raise
     except (ValueError, KeyError, TypeError, ArithmeticError):
-        raise AnalysisError("verification") from None
+        raise AnalysisError("verification", stage="runner") from None
     except Exception as error:
         category = {401: "authentication", 403: "access", 404: "access", 429: "rate_limit"}.get(
             getattr(error, "status_code", None), "provider_error")
