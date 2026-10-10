@@ -44,6 +44,43 @@ class DocumentJourneyTests(unittest.TestCase):
         self.assertEqual(self.upload(b"not pdf").status_code, 422)
         self.assertEqual(self.upload(b"%PDF-" + b"x" * (4 * 1024 * 1024)).status_code, 413)
 
+    def test_twelve_uploaded_reviewed_periods_cover_year_and_thirteenth_is_rejected(self):
+        from datetime import date
+        revisions = {}
+        for month in range(1, 13):
+            start = date(2024, month, 1)
+            end = date(2025, 1, 1) if month == 12 else date(2024, month + 1, 1)
+            days = (end - start).days
+            usage, total = str(days * 20), str(days * 3)
+            text = (f"FICTIONAL / Juniper Power / DEMO-A71 / MTR-EXAMPLE\n"
+                    f"Electricity consumption {usage} kWh / Current charges USD {total}\n"
+                    f"Service {start} to {end} / {days} days")
+            response = self.upload(pdf_bytes(text))
+            self.assertEqual(response.status_code, 201, response.text)
+            doc = response.json()
+            path = "/api/documents/" + doc["id"]
+            facts = dict(FACTS, period_start=start.isoformat(), period_end=end.isoformat(),
+                         days=days, consumption=usage, current_total=total, charges=[])
+            edited = self.client.put(path, json={"revision": 0, "facts": facts}, headers=HEADERS)
+            self.assertEqual(edited.status_code, 200, edited.text)
+            approved = self.client.post(path + "/approve", json={"revision": 1}, headers=HEADERS)
+            self.assertEqual(approved.status_code, 200, approved.text)
+            revisions[doc["id"]] = 1
+        overflow = self.upload(pdf_bytes("FICTIONAL thirteenth document"))
+        self.assertEqual(overflow.status_code, 409)
+        self.assertIn("12 bills", overflow.json()["detail"])
+        response = self.client.post("/api/insights", json={"revisions": revisions}, headers=HEADERS)
+        self.assertEqual(response.status_code, 200, response.text)
+        result = response.json()
+        self.assertEqual(result["document_ids"], list(revisions))
+        self.assertEqual(result["aggregate"]["periods"], 12)
+        self.assertEqual(result["aggregate"]["days"], 366)
+        self.assertEqual(result["aggregate"]["gap_days"], 0)
+        self.assertEqual(result["aggregate"]["total_kwh"], "7320.00")
+        self.assertEqual(result["aggregate"]["current_total"], "1098.00")
+        self.assertEqual(result["aggregate"]["daily_kwh"], "20.00")
+        self.assertEqual(len(result["comparisons"]), 11)
+
     def test_other_session_cannot_read_edit_delete_or_analyze_document(self):
         doc = self.client.post("/api/example", headers=HEADERS).json()
         stranger = TestClient(self.app, base_url=ORIGIN)

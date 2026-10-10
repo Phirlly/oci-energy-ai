@@ -7,7 +7,7 @@ are available; the public OCI application deployment is still being built.
 
 ## Try bill review
 
-Use **Python 3.12**, **Node 26.10.0** and [uv](https://docs.astral.sh/uv/getting-started/installation/).
+Use **Linux or macOS**, **Python 3.12**, **Node 26.10.0** and [uv](https://docs.astral.sh/uv/getting-started/installation/).
 From the repository root:
 
 ```sh
@@ -24,7 +24,7 @@ example**, review the fictional bill, approve it and calculate insights. No
 model key is needed for this flow.
 
 Upload one bill or up to 12 bills. Each must be an unencrypted text PDF, at most
-4 MiB and 20 nonempty text pages; scanned bills need OCR first. Review actual
+4 MiB, 20 nonempty text pages and 60,000 extracted characters; scanned bills need OCR first. Review actual
 service dates, billed days, consumption, currency and current electricity charges.
 Previous balances and fees already included in another charge must not be added
 again. Approve each bill, then select compatible bills for combined insights.

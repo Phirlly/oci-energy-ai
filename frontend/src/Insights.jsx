@@ -12,17 +12,21 @@ export default function Insights({ result, documents }) {
       <div><span>Supplied consumption</span><strong>{aggregate.total_kwh} kWh</strong></div>
       <div><span>Average billed cost / kWh</span><strong>{aggregate.average_cost_per_kwh === null ? 'Unavailable' : aggregate.currency + ' ' + aggregate.average_cost_per_kwh}</strong></div>
     </div>}
-    {aggregate && <p>{aggregate.periods} supplied period{aggregate.periods === 1 ? '' : 's'} · {aggregate.days} billed days · {aggregate.gap_days} gap days.
-      The average includes billed charges; it is not a tariff rate.</p>}
+    {aggregate && <p>{aggregate.periods} supplied period{aggregate.periods === 1 ? '' : 's'} · {aggregate.days} billed days · {aggregate.gap_days} gap days.</p>}
+    <p>The average includes billed charges; it is not a tariff rate.</p>
     {result.warnings.map((warning, i) => <p className="notice" key={i}>{warning}</p>)}
     <h3>Checks by selected bill</h3>
-    {result.bills.map((bill, index) => <div className="bill-check" key={index}>
-      <strong>{documents.find(doc => doc.id === result.document_ids[index])?.facts.supplier || 'Selected bill ' + (index + 1)}
-        {' · '}{documents.find(doc => doc.id === result.document_ids[index])?.facts.period_start || 'Date unconfirmed'}</strong>
+    {result.bills.map((bill, index) => {
+      const facts = documents.find(doc => doc.id === result.document_ids[index])?.facts;
+      return <div className="bill-check" key={index}>
+      <strong>{facts?.supplier || 'Selected bill ' + (index + 1)}
+        {' · '}{facts?.period_start || 'Date unconfirmed'}</strong>
       <p>Daily use: {bill.daily_kwh === null ? 'Unavailable' : bill.daily_kwh + ' kWh'} ·
         Charge difference: {bill.charge_difference ?? 'Unavailable (no additive breakdown)'}</p>
+      <p>Average billed cost / kWh: {bill.average_cost_per_kwh === null ? 'Unavailable' :
+        facts.currency + ' ' + bill.average_cost_per_kwh}</p>
       {bill.warnings.map((warning, i) => <p className="muted" key={i}>{warning}</p>)}
-    </div>)}
+    </div>; })}
     {result.comparisons.length > 0 && <><h3>Daily usage changes</h3>
       <ul>{result.comparisons.map((item, i) => <li key={i}>{item.earlier_start} → {item.later_start}: {
         item.daily_usage_change_percent === null ? 'Unavailable (previous usage was zero)' :
