@@ -89,7 +89,7 @@ contracts. Tests are separated into `tests/unit`, `tests/contracts` and
 `tests/integration/sample`. All Python tests run offline. For a focused check:
 
 ```sh
-python -m unittest tests.unit.energy.test_bill_charges -v
+python -m unittest tests.unit.energy.test_billing -v
 ```
 
 ## Terraform foundation

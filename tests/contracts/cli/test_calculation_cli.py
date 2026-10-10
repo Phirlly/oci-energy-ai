@@ -1,3 +1,4 @@
+from decimal import Decimal
 import json
 import subprocess
 import sys
@@ -25,6 +26,20 @@ class CalculationCommandTests(unittest.TestCase):
                            float(report["baseline_bill"]["energy_kwh"]))
         self.assertAlmostEqual(report["battery"]["final_soc_kwh"], 0, places=8)
         self.assertIn("hindsight", report["method"])
+        # Documented sample regression values; hand calculations are in unit tests.
+        self.assertEqual(report["baseline_bill"]["total_usd"], "6710.80")
+        self.assertEqual(report["scenario_bill"]["total_usd"], "6344.11")
+        self.assertEqual(report["modeled_cost_difference_usd"], "366.69")
+        battery = report["battery"]
+        self.assertGreater(battery["losses_kwh"], 0)
+        self.assertAlmostEqual(battery["losses_kwh"],
+                               battery["charge_energy_kwh"] - battery["discharge_energy_kwh"])
+        added_energy = (Decimal(report["scenario_bill"]["energy_kwh"])
+                        - Decimal(report["baseline_bill"]["energy_kwh"]))
+        self.assertAlmostEqual(float(added_energy), battery["losses_kwh"])
+        self.assertEqual(Decimal(report["scenario_bill"]["peak_kw"]), Decimal("80"))
+        self.assertEqual(battery["target_kw"], 80)
+        self.assertIs(battery["target_achieved"], True)
 
     def test_invalid_arguments_have_nonzero_exit_and_no_traceback(self):
         for args in (("scenario", "--target-kw", "NaN"), ("baseline", "--intervals", "missing.csv")):
