@@ -1,8 +1,9 @@
 # OCI Energy AI
 
 A reusable electricity-bill and battery-scenario demo for OCI.
-**Available today:** offline calculations and a GitHub configuration check.
-Agents, bill uploads, a browser interface and automated OCI deployment are pending.
+**Available today:** offline calculations, a GitHub configuration check and
+Terraform foundation workflows. Live provisioning verification, agents, bill
+uploads and the browser application are pending.
 
 ## Quick start
 
@@ -60,9 +61,12 @@ bill totals alone cannot establish interval peaks or precise battery savings.
 
 ## GitHub setup
 
-The **Check deployment setup** workflow checks configuration only. Provisioning,
-deployment, update, rollback and cleanup are pending. No local Python, `.env` or
-OCI profile is needed for this check.
+GitHub runs the setup and Terraform foundation workflows. No local Python,
+`.env` or OCI profile is required. Use an OCI identity with target-compartment
+[Resource Manager permissions](https://docs.oracle.com/en-us/iaas/Content/Identity/Reference/resourcemanagerpolicyreference.htm)
+and permission to manage the bucket and
+[Generative AI project](https://docs.oracle.com/en-us/iaas/Content/generative-ai/project-permissions.htm).
+Confirm the selected region supports projects; IAM and quotas require live verification.
 
 1. In your repository, open **Settings → Environments → New environment** and
    create `demo`. Before adding credentials, restrict **Deployment branches and
@@ -87,37 +91,45 @@ OCI profile is needed for this check.
 3. Open **Actions → Check deployment setup → Run workflow**, select `dev` or a
    validated `main`, and inspect the summary. Forks need Actions enabled and their
    own settings. The workflow must exist on the repository's default branch.
+4. After validation passes for that commit, run **Bootstrap OCI foundation** with
+   `apply` on the same branch. It creates or updates the owned Resource Manager
+   stack, waits for its plan, then applies that exact plan. Logs report recovery
+   IDs and the bucket, namespace and project outputs. This creates the foundation;
+   it does not launch the application or test models.
 
-Use an OCI identity authorized for the target compartment. A passing check verifies
-identifier formats and secret presence only—not credentials, IAM, quotas or model
-access. Optional provider keys may be omitted. No cloud resources or model calls
-are made. Custom GitHub App deployment protection rules are incompatible with this
-check; the branch restrictions above are supported.
+A passing configuration check verifies formats and secret presence only.
+OpenAI/Anthropic keys are optional and unused by bootstrap; Vault delivery and
+provider verification are pending. Custom GitHub App deployment protection rules
+are incompatible with the configuration check; branch restrictions are supported.
 
-## Terraform configuration
+## Foundation recovery and cleanup
 
-The foundation defines a private artifact bucket and a Generative AI project;
-application infrastructure is pending. From a successful
-[Validate run](https://github.com/Phirlly/oci-energy-ai/actions/workflows/validate.yml)
-with **all three jobs passed**, download
-`terraform-<commit SHA>-attempt-<attempt number>` while signed into GitHub.
-Artifacts expire after seven days.
+The private bucket and GenAI project may incur OCI charges when used. Keep one
+owning repository per deployment ID; forked installations need distinct IDs.
+Keep its region and compartment fixed. Workflow runs serialize within a repository;
+do not modify its stack concurrently through another repository or the Console.
 
-Extract the download, then verify the inner `terraform.zip` from that directory:
+On failure or timeout, inspect the logged stack/job in OCI Resource Manager.
+The remote job may still be running. Wait for it to finish before rerunning
+`apply`; the workflow refuses active jobs and preserves state for recovery.
 
-```sh
-sha256sum -c terraform.zip.sha256       # Linux
-shasum -a 256 -c terraform.zip.sha256   # macOS
-```
+To remove the foundation, run the same workflow with `destroy` and enter the exact
+`DEPLOYMENT_ID` as confirmation. It removes managed resources, retains the empty
+stack and never purges bucket contents. A nonempty bucket blocks cleanup; review
+and remove its data separately, then retry. Application update/rollback is pending.
 
-The result should be `terraform.zip: OK`. This archive contains configuration only.
+Successful [Validate runs](https://github.com/Phirlly/oci-energy-ai/actions/workflows/validate.yml)
+also publish a configuration-only Terraform ZIP and SHA256 checksum for seven days.
+Use artifacts only after all three jobs pass.
 
 ## Tests and private data
 
-Run the offline Python suite:
+With Python 3.12 and [uv](https://docs.astral.sh/uv/getting-started/installation/),
+install the locked dependencies and run the offline suite:
 
 ```sh
-python -m unittest discover -s tests -t . -v
+uv sync --locked --no-dev
+uv run --no-sync python -m unittest discover -s tests -t . -v
 ```
 
 Keep private inputs under Git-ignored `uploads/`. Never commit bills, API keys or

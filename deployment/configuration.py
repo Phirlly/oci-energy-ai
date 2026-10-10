@@ -4,6 +4,10 @@ from dataclasses import asdict, dataclass
 import re
 
 
+class DeploymentError(Exception):
+    """Fixed operator guidance safe for deployment logs."""
+
+
 _PATTERNS = {
     "deployment_id": r"[a-z][a-z0-9-]{1,30}[a-z0-9]",
     "region": r"[a-z]{2,3}-[a-z][a-z0-9-]{1,30}-[1-9][0-9]?",
