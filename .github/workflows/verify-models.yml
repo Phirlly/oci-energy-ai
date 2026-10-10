@@ -56,5 +56,7 @@ jobs:
           OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
           ANTHROPIC_MODEL: ${{ vars.ANTHROPIC_MODEL }}
         run: |
-          uv run --no-sync python -m deployment.verify_models --provider "$MODEL_PROVIDER"
-          uv run --no-sync python -m deployment.verify_bills --provider "$MODEL_PROVIDER"
+          verification_status=0
+          uv run --no-sync python -m deployment.verify_models --provider "$MODEL_PROVIDER" || verification_status=1
+          uv run --no-sync python -m deployment.verify_bills --provider "$MODEL_PROVIDER" || verification_status=1
+          exit "$verification_status"
