@@ -5,7 +5,7 @@ import tempfile
 import unittest
 
 
-class PreparationTests(unittest.TestCase):
+class SamplePreparationCommandTests(unittest.TestCase):
     def test_unverified_source_is_rejected_without_output(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)

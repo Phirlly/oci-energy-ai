@@ -1,11 +1,11 @@
 from datetime import datetime, timedelta
 from decimal import Decimal
 import math
-from pathlib import Path
 import unittest
 
 from energy_ai.battery import Battery, simulate_battery
-from energy_ai.intervals import Interval, load_intervals
+from energy_ai.intervals import Interval
+from tests.assertions.battery_balance import assert_battery_balance
 
 
 def profile(load_kw):
@@ -13,22 +13,9 @@ def profile(load_kw):
                           Decimal(str(kw)) / 4) for i, kw in enumerate(load_kw))
 
 
-class BatteryTests(unittest.TestCase):
+class BatteryDispatchTests(unittest.TestCase):
     def assert_physics(self, result, battery):
-        eta = math.sqrt(battery.round_trip_efficiency)
-        previous = 0.0
-        for row in result.steps:
-            self.assertGreaterEqual(row.grid_kw, -1e-9)
-            self.assertGreaterEqual(row.soc_kwh, -1e-9)
-            self.assertLessEqual(row.soc_kwh, battery.capacity_kwh + 1e-9)
-            self.assertLessEqual(row.charge_kw, battery.power_kw + 1e-9)
-            self.assertLessEqual(row.discharge_kw, battery.power_kw + 1e-9)
-            self.assertAlmostEqual(row.charge_kw * row.discharge_kw, 0)
-            self.assertAlmostEqual(row.grid_kw, row.load_kw + row.charge_kw - row.discharge_kw)
-            self.assertAlmostEqual(row.soc_kwh, previous + row.charge_kw * .25 * eta
-                                   - row.discharge_kw * .25 / eta)
-            previous = row.soc_kwh
-        self.assertAlmostEqual(previous, 0, places=8)
+        assert_battery_balance(self, result, battery)
 
     def test_perfect_efficiency_hand_calculation(self):
         battery = Battery(power_kw=4, capacity_kwh=1, round_trip_efficiency=1)
@@ -73,19 +60,6 @@ class BatteryTests(unittest.TestCase):
         for cap in (0, -1, math.nan, math.inf):
             with self.subTest(cap=cap), self.assertRaises(ValueError):
                 simulate_battery(profile([1, 2]), Battery(1, 1, 1), target_kw=cap)
-
-    def test_prepared_month_respects_physics_and_energy_balance(self):
-        readings = load_intervals(Path("examples/monthly-office/intervals.csv"))
-        battery = Battery(25, 100, .9)
-        result = simulate_battery(readings, battery, target_kw=80)
-        self.assert_physics(result, battery)
-        self.assertAlmostEqual(max(row.grid_kw for row in result.steps), 80)
-        charge = sum(row.charge_kw * .25 for row in result.steps)
-        discharge = sum(row.discharge_kw * .25 for row in result.steps)
-        self.assertAlmostEqual(discharge / charge, .9)
-        self.assertAlmostEqual(float(sum(row.energy_kwh for row in result.grid_intervals)
-                                     - sum(row.energy_kwh for row in readings)), charge - discharge)
-
 
 if __name__ == "__main__":
     unittest.main()

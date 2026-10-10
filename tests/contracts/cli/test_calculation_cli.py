@@ -4,7 +4,7 @@ import sys
 import unittest
 
 
-class CommandTests(unittest.TestCase):
+class CalculationCommandTests(unittest.TestCase):
     def run_cli(self, *arguments):
         return subprocess.run([sys.executable, "-m", "energy_ai", *arguments],
                               capture_output=True, text=True, timeout=15)

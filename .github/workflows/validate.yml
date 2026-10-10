@@ -1,4 +1,4 @@
-name: Validate calculations
+name: Validate
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  calculations:
+  python:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -20,7 +20,33 @@ jobs:
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: '3.12'
-      - run: python -m unittest discover -s tests -v
-      - run: python -m compileall -q energy_ai tools
+      - run: python -m unittest discover -s tests -t . -v
+      - run: python -m compileall -q energy_ai tools deployment
       - run: python -m energy_ai baseline
       - run: python -m energy_ai scenario --power-kw 25 --capacity-kwh 100 --target-kw 80
+      - run: python -m deployment.terraform_bundle --output dist/terraform.zip
+
+  terraform:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ['1.5.7', '1.16.4']
+    defaults:
+      run:
+        working-directory: infra/terraform
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@5e8dbf3c6d9deaf4193ca7a8fb23f2ac83bb6c85 # v4.0.0
+        with:
+          terraform_version: ${{ matrix.version }}
+          terraform_wrapper: false
+      - run: terraform init -backend=false -input=false -lockfile=readonly
+      - run: terraform validate -no-color
+      - if: matrix.version == '1.16.4'
+        run: terraform fmt -check -recursive
+      - if: matrix.version == '1.16.4'
+        run: terraform test -no-color

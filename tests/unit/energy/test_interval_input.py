@@ -8,7 +8,7 @@ import unittest
 from energy_ai.intervals import Interval, load_intervals, validate_intervals
 
 
-class IntervalTests(unittest.TestCase):
+class IntervalInputTests(unittest.TestCase):
     def write_csv(self, rows, header=("interval_end", "energy_kwh")):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)

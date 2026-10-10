@@ -79,13 +79,49 @@ precise battery savings.
 ## Check the calculations
 
 ```sh
-python -m unittest discover -s tests -v
-python -m compileall -q energy_ai tools
+python -m unittest discover -s tests -t . -v
+python -m compileall -q energy_ai tools deployment
 ```
 
 Tests check hand-calculated bills, the independent sample baseline, battery
 energy balance and limits, invalid inputs, source-verification failures and CLI
-contracts. The included GitHub Actions workflow runs the same offline commands.
+contracts. Tests are separated into `tests/unit`, `tests/contracts` and
+`tests/integration/sample`. All Python tests run offline. For a focused check:
+
+```sh
+python -m unittest tests.unit.energy.test_bill_charges -v
+```
+
+## Terraform foundation
+
+The initial configuration defines a private artifact bucket and a Generative AI
+project with optional memory services disabled. It does not yet deploy the
+application, networking or deployment lifecycle. No cloud credentials are needed
+for these checks; provider installation requires network access:
+
+```sh
+terraform -chdir=infra/terraform init -backend=false -input=false -lockfile=readonly
+terraform -chdir=infra/terraform validate
+```
+
+GitHub Actions validates with Terraform **1.5.7** for Resource Manager compatibility
+and **1.16.4** for offline provider-mocked tests. With 1.16.4, run:
+
+```sh
+terraform -chdir=infra/terraform fmt -check -recursive
+terraform -chdir=infra/terraform test
+python -m deployment.terraform_bundle --output dist/terraform.zip
+```
+
+The ZIP contains only the reviewed Terraform files and exact provider lock.
+Packaging prints its SHA256 and refuses to overwrite an existing archive; choose
+a new output path when rerunning. Local state, credentials, test files and private
+documents are excluded. This command creates an archive only.
+
+Deployment inputs are `deployment_id` (3–32 lowercase letters, digits or hyphens,
+starting with a letter and ending with a letter or digit), `region` and an OC1
+`compartment_ocid`. Syntactic checks do not prove service availability or IAM
+permissions. The full deployment instructions will accompany the runnable service.
 
 ## Privacy and current limits
 
