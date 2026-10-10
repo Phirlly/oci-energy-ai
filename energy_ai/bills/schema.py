@@ -51,6 +51,14 @@ class Evidence(StrictModel):
     offset: int | None = Field(default=None, ge=0)
 
 
+class EvidenceError(ValueError):
+    """Only application-owned field names and counts may cross this boundary."""
+
+    def __init__(self, category, fields, unexpected_keys=0):
+        self.category, self.fields, self.unexpected_keys = category, fields, unexpected_keys
+        super().__init__("Bill evidence verification failed.")
+
+
 class Candidate(StrictModel):
     facts: Facts
     evidence: dict[str, Evidence] = Field(max_length=55)
@@ -60,9 +68,12 @@ class Candidate(StrictModel):
                     if name != "charges" and value is not None and value != "unknown"}
         required.update(f"charges.{index}" for index in range(len(self.facts.charges)))
         if set(self.evidence) != required:
-            raise ValueError("Missing or unexpected evidence.")
+            raise EvidenceError("keys", sorted(required - set(self.evidence)),
+                                len(set(self.evidence) - required))
+        unmatched = [name for name, item in self.evidence.items()
+                     if item.page > len(pages) or item.quote not in pages[item.page - 1]]
+        if unmatched:
+            raise EvidenceError("quote", sorted(unmatched))
         for item in self.evidence.values():
-            if item.page > len(pages) or item.quote not in pages[item.page - 1]:
-                raise ValueError("Source evidence not found.")
             item.offset = pages[item.page - 1].index(item.quote)
         return self

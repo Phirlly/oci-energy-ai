@@ -7,6 +7,8 @@ from unittest.mock import patch
 from deployment.verify_bills import main, check_facts
 from energy_ai.bills.schema import Facts
 from tests.fixtures.bills import FACTS
+from tests.fixtures.agent_responses import ScriptedModel, message
+from tests.fixtures.bills import candidate
 
 
 class PublicBillVerificationTests(unittest.TestCase):
@@ -38,3 +40,20 @@ class PublicBillVerificationTests(unittest.TestCase):
         self.assertEqual(report["providers"][0]["status"], "failed")
         self.assertNotIn("private-marker", output.getvalue() + errors.getvalue())
         self.assertNotIn("secret-marker", output.getvalue() + errors.getvalue())
+
+    @patch("deployment.verify_bills.open_model")
+    def test_report_excludes_arbitrary_evidence_keys_and_quotes(self, factory):
+        data = candidate()
+        data["evidence"]["private-marker"] = dict(page=1, quote="secret-marker")
+        @asynccontextmanager
+        async def opened(*args, **kwargs):
+            yield ScriptedModel([[message(data)]])
+        factory.side_effect = opened
+        output = io.StringIO()
+        with redirect_stdout(output):
+            code = main(["--provider", "openai"], environment={"OPENAI_API_KEY": "key-marker"})
+        report = json.loads(output.getvalue())["providers"][0]
+        self.assertEqual(code, 1)
+        self.assertEqual(report["stage"], "extraction_evidence_keys")
+        self.assertEqual(report["diagnostics"], dict(fields=[], unexpected_keys=1))
+        self.assertNotIn("marker", output.getvalue())

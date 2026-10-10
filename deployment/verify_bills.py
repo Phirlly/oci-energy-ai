@@ -58,6 +58,7 @@ async def verify_bill_provider(provider, environment):
     except Exception as error:
         return dict(provider=provider, status="failed", completed_checks=len(checks),
                     stage="extraction_" + error.category if isinstance(error, ExtractionError) else stage,
+                    diagnostics=error.diagnostics if isinstance(error, ExtractionError) else None,
                     guidance="Public bill extraction or expected-fact check failed; raw details suppressed.")
 
 
