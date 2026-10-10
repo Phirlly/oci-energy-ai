@@ -43,7 +43,7 @@ Service ${period.start} to ${period.end} / ${period.days} days`;
     await page.getByLabel('Upload bill PDFs').setInputFiles({
       name: `fictional-${index}.pdf`, mimeType: 'application/pdf', buffer: bytes
     });
-    await expect(page.getByLabel('Consumption')).toHaveValue('');
+    await expect(page.getByLabel('Consumption', { exact: true })).toHaveValue('');
     await page.getByLabel('Service type').selectOption('electricity');
     await page.getByLabel('Usage meaning').selectOption('consumption');
     for (const [label, value] of Object.entries({ Supplier: 'Sample Power', 'Full account identity': 'DEMO',
@@ -65,7 +65,7 @@ Service ${period.start} to ${period.end} / ${period.days} days`;
   const first = page.locator('.bill-row').filter({ hasText: '2024-02-01' });
   const second = page.locator('.bill-row').filter({ hasText: '2024-03-01' });
   await first.getByRole('button').click();
-  await page.getByLabel('Consumption').fill('870');
+  await page.getByLabel('Consumption', { exact: true }).fill('870');
   await page.getByRole('button', { name: 'Save corrections' }).click();
   await expect(first.getByRole('checkbox')).not.toBeChecked();
   await expect(first.getByRole('checkbox')).toBeDisabled();

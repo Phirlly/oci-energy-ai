@@ -11,14 +11,14 @@ test.afterEach(async ({ page, baseURL }) => {
 test('unsaved corrections protect intake and keyboard can save them', async ({ page }) => {
   await login(page);
   await page.getByRole('button', { name: 'Try the example' }).click();
-  await page.getByLabel('Consumption').fill('700');
+  await page.getByLabel('Consumption', { exact: true }).fill('700');
   await expect(page.getByRole('button', { name: 'Try the example' })).toBeDisabled();
   await expect(page.getByLabel('Upload bill PDFs')).toBeDisabled();
   const save = page.getByRole('button', { name: 'Save corrections' });
   await save.focus();
   await expect(save).toBeFocused();
   await page.keyboard.press('Enter');
-  await expect(page.getByLabel('Consumption')).toHaveValue('700');
+  await expect(page.getByLabel('Consumption', { exact: true })).toHaveValue('700');
   await expect(page.getByRole('button', { name: 'Approve reviewed facts' })).toBeEnabled();
 });
 
@@ -93,7 +93,7 @@ test.describe('scripted provider browser contract', () => {
     await page.getByLabel('Send this bill’s extracted text', { exact: false }).check();
     await page.getByRole('button', { name: 'Extract with AI' }).click();
     await page.getByRole('button', { name: 'Cancel extraction' }).click();
-    await page.getByLabel('Consumption').fill('725');
+    await page.getByLabel('Consumption', { exact: true }).fill('725');
     await page.getByRole('button', { name: 'Save corrections' }).click();
     await page.getByRole('button', { name: 'Approve reviewed facts' }).click();
     await page.getByRole('button', { name: 'Calculate insights' }).click();
@@ -112,13 +112,13 @@ async function login(page) {
 test('prepared example can be corrected, approved, compared and deleted', async ({ page }) => {
   await login(page);
   await page.getByRole('button', { name: 'Try the example' }).click();
-  await expect(page.getByLabel('Consumption')).toHaveValue('580');
+  await expect(page.getByLabel('Consumption', { exact: true })).toHaveValue('580');
   await expect(page.getByText('FICTIONAL DEMO - Juniper Power', { exact: false })).toBeVisible();
   await page.getByRole('button', { name: 'Approve reviewed facts' }).click();
   await page.getByRole('button', { name: 'Calculate insights' }).click();
   await expect(page.getByTestId('daily-usage')).toHaveText('20.00 kWh/day');
   await expect(page.getByRole('heading', { name: 'Supplied-period insights' })).toBeFocused();
-  await page.getByLabel('Consumption').fill('870');
+  await page.getByLabel('Consumption', { exact: true }).fill('870');
   await expect(page.getByTestId('daily-usage')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Approve reviewed facts' })).toBeDisabled();
   await page.getByRole('button', { name: 'Save corrections' }).click();
@@ -126,7 +126,7 @@ test('prepared example can be corrected, approved, compared and deleted', async 
   await page.getByRole('button', { name: 'Calculate insights' }).click();
   await expect(page.getByTestId('daily-usage')).toHaveText('30.00 kWh/day');
   await page.getByRole('button', { name: 'Delete bill' }).click();
-  await expect(page.getByLabel('Consumption')).toHaveCount(0);
+  await expect(page.getByLabel('Consumption', { exact: true })).toHaveCount(0);
 });
 
 test('real PDF upload accepts another layout and manual review remains available without keys', async ({ page }) => {
@@ -142,7 +142,7 @@ test('real PDF upload accepts another layout and manual review remains available
   await page.getByLabel('Start date').fill('2024-06-01');
   await page.getByLabel('End date').fill('2024-07-01');
   await page.getByLabel('Billed days').fill('30');
-  await page.getByLabel('Consumption').fill('300');
+  await page.getByLabel('Consumption', { exact: true }).fill('300');
   await page.getByLabel('Current electricity charges').fill('60');
   await page.getByLabel('Currency').fill('USD');
   await page.getByRole('button', { name: 'Save corrections' }).click();
