@@ -37,6 +37,39 @@ class SampleAnalysisTests(unittest.IsolatedAsyncioTestCase):
             await analyze_sample(ScriptedModel([[message()]]))
         self.assertEqual(caught.exception.diagnostics, {"stage": "tool_evidence"})
 
+    async def test_complete_fences_preserve_numeric_verification_and_usage(self):
+        for label, newline in (("json", "\n"), ("", "\n"), ("json", "\r\n")):
+            for wrong in (False, True):
+                answer = message(ANSWER | ({"scenario_total_usd": "1.00"} if wrong else {}))
+                answer.content[0].text = f"  ```{label}{newline}{answer.content[0].text}{newline}```  "
+                model = ScriptedModel([[tool_call()], [answer]])
+                with self.subTest(label=label, newline=newline, wrong=wrong):
+                    if wrong:
+                        with self.assertRaises(AnalysisError) as caught:
+                            await analyze_sample(model)
+                        self.assertEqual(caught.exception.diagnostics, {"stage": "answer_facts"})
+                    else:
+                        result = await analyze_sample(model)
+                        self.assertEqual(result.answer, ANSWER)
+                        self.assertEqual((result.tool_calls, result.model_requests), (1, 2))
+
+    async def test_wrappers_and_output_length_are_strictly_bounded(self):
+        body = json.dumps(ANSWER)
+        wrapped = f"```json\n{body}\n```"
+        invalid = ("Result: " + wrapped, wrapped + "\n" + wrapped, wrapped[:-3],
+                   wrapped + " extra", body.ljust(6001))
+        for raw in (*invalid, body.ljust(6000)):
+            answer = message()
+            answer.content[0].text = raw
+            with self.subTest(length=len(raw), valid=raw not in invalid):
+                if raw in invalid:
+                    with self.assertRaises(AnalysisError) as caught:
+                        await analyze_sample(ScriptedModel([[tool_call()], [answer]]))
+                    self.assertEqual(caught.exception.diagnostics["stage"], "answer_json")
+                else:
+                    result = await analyze_sample(ScriptedModel([[tool_call()], [answer]]))
+                    self.assertEqual(result.answer, ANSWER)
+
     async def test_mismatched_amount_or_missing_fields_fails_at_specific_stage(self):
         variants = [(ANSWER | {"scenario_total_usd": "1.00"}, "answer_facts"),
                     (ANSWER | {"baseline_total_usd": "NaN"}, "answer_facts"),

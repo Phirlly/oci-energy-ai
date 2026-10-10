@@ -19,7 +19,9 @@ cd ..
 uv run --no-sync python -m energy_ai.web
 ```
 
-Open the printed localhost URL and enter its launch code. **Office demo** shows
+Open the printed localhost URL and enter its launch code. Set `DEMO_PASSWORD`
+in the server environment to choose that code; otherwise one is generated locally.
+**Office demo** shows
 the prepared bill, downloadable illustrative PDF and demand chart. Adjust the
 battery and choose **Calculate scenario**; no model key is needed. Configured
 providers enable **Run analysts** after consent. **Technical view** shows actual
@@ -101,6 +103,7 @@ of uploaded-bill analysis.
 | `OCI_PRIVATE_KEY` | Secret | Matching PEM signing key |
 | `OCI_PRIVATE_KEY_PASSPHRASE` | Secret | Only for an encrypted key |
 | `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` | Secrets | Optional external providers |
+| `DEMO_PASSWORD` | Secret | Browser login password, at least 24 random characters; used by the forthcoming application deployment |
 
 3. Run **Check deployment setup** on `dev` or validated `main`. This checks formats
    and presence, not live permissions. Custom GitHub App deployment protection

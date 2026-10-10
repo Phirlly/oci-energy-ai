@@ -17,8 +17,9 @@ from energy_ai.bills.insights import summarize
 
 
 class ExpectedFactsError(ValueError):
-    def __init__(self, fields):
+    def __init__(self, fields, diagnostics=None):
         self.fields = sorted(fields)
+        self.diagnostics = dict(fields=self.fields, **(diagnostics or {}))
         super().__init__("Independent fixture comparison failed.")
 
 
@@ -40,7 +41,14 @@ def check_facts(facts, index):
                            **{name: expected[name] for name in ("supplier", "account", "meter")})
     different = [name for name, value in expected_fields.items() if getattr(facts, name) != value]
     if different:
-        raise ExpectedFactsError(different)
+        diagnostics = {}
+        if "supplier" in different:
+            actual = " ".join((facts.supplier or "").casefold().split())
+            wanted = expected["supplier"].casefold()
+            diagnostics = dict(supplier_absent=facts.supplier is None,
+                               supplier_normalized_match=actual == wanted,
+                               supplier_contains_expected=wanted in actual)
+        raise ExpectedFactsError(different, diagnostics)
     insight = summarize([facts])["bills"][0]
     different = [name for name, value in dict(daily_kwh=expected["daily"], charge_difference="0.00").items()
                  if insight[name] != value]
@@ -71,7 +79,7 @@ async def verify_bill_provider(provider, environment):
         if isinstance(error, ExtractionError):
             diagnostics = error.diagnostics
         elif isinstance(error, ExpectedFactsError):
-            diagnostics = dict(fields=error.fields)
+            diagnostics = error.diagnostics
         return dict(provider=provider, status="failed", completed_checks=len(checks),
                     stage="extraction_" + error.category if isinstance(error, ExtractionError) else stage,
                     diagnostics=diagnostics,

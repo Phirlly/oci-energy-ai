@@ -20,6 +20,6 @@ async def scripted(provider, pages):
 
 
 if __name__ == "__main__":
-    uvicorn.run(create_app(access_code=os.environ["ENERGY_ACCESS_CODE"], origin="http://127.0.0.1:8766",
+    uvicorn.run(create_app(access_code=os.environ["DEMO_PASSWORD"], origin="http://127.0.0.1:8766",
                            providers=["openai", "anthropic"], extractor=scripted),
                 host="127.0.0.1", port=8766, access_log=False)

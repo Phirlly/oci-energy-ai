@@ -20,7 +20,7 @@ def main():
         parser.error("Use a port between 1024 and 65535.")
     if not (Path(__file__).resolve().parents[2] / "frontend/dist/index.html").is_file():
         parser.error("Build the browser application first: cd frontend && npm ci && npm run build")
-    code = os.environ.get("ENERGY_ACCESS_CODE") or secrets.token_urlsafe(18)
+    code = os.environ.get("DEMO_PASSWORD") or secrets.token_urlsafe(18)
     origin = f"http://127.0.0.1:{args.port}"
     runtime = Path(__file__).resolve().parents[2] / 'runtime'
     runtime.mkdir(mode=0o700, exist_ok=True)

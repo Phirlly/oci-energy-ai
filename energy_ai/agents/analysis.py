@@ -4,6 +4,7 @@ import asyncio
 from dataclasses import dataclass
 from decimal import Decimal
 import json
+import re
 
 from agents import Agent, ModelSettings, RunConfig, Runner
 from agents.exceptions import ModelTimeoutError
@@ -83,7 +84,11 @@ def _verify(result, context):
             if actual != EXPECTED:
                 raise ValueError("Independent sample regression.")
         stage = "answer_json"
-        answer = json.loads(result.final_output)
+        raw = result.final_output
+        if not isinstance(raw, str) or len(raw) > 6000:
+            raise ValueError("Answer too large.")
+        wrapper = re.fullmatch(r"```(?:json)?[ \t]*\r?\n(.*?)\r?\n```", raw.strip(), re.DOTALL)
+        answer = json.loads(wrapper.group(1) if wrapper else raw)
         stage = "answer_shape"
         if not isinstance(answer, dict) or set(answer) != set(EXPECTED) | {"explanation"}:
             raise ValueError("Answer fields differ.")

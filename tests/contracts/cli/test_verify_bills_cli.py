@@ -52,6 +52,35 @@ class PublicBillVerificationTests(unittest.TestCase):
         self.assertNotIn("secret-marker", output.getvalue() + errors.getvalue())
 
     @patch("deployment.verify_bills.open_model")
+    def test_supplier_mismatch_reports_only_boolean_shape_and_still_fails(self, factory):
+        from energy_ai.bills.examples import EXAMPLES
+        for supplier, absent, normalized, contains in (
+            (None, True, False, False),
+            (" JUNIPER   power ", False, True, True),
+            ("private-marker Juniper Power", False, False, True),
+            ("private-marker", False, False, False),
+        ):
+            data = proposal(text=EXAMPLES[0])
+            if supplier is None:
+                data["supplier"] = None
+            else:
+                data["supplier"]["value"] = supplier
+            @asynccontextmanager
+            async def opened(*args, **kwargs):
+                yield ScriptedModel([[message(data)]])
+            factory.side_effect = opened
+            output = io.StringIO()
+            with self.subTest(supplier=supplier), redirect_stdout(output):
+                code = main(["--provider", "openai"], environment={"OPENAI_API_KEY": "key-marker"})
+            report = json.loads(output.getvalue())["providers"][0]
+            self.assertEqual(code, 1)
+            self.assertEqual(report["stage"], "expected_facts")
+            self.assertEqual(report["diagnostics"], dict(fields=["supplier"], supplier_absent=absent,
+                             supplier_normalized_match=normalized, supplier_contains_expected=contains))
+            self.assertNotIn("marker", output.getvalue())
+            self.assertNotIn("Juniper", output.getvalue())
+
+    @patch("deployment.verify_bills.open_model")
     def test_report_excludes_arbitrary_evidence_keys_and_quotes(self, factory):
         data = proposal()
         data["account"]["evidence"]["private-marker"] = "secret-marker"
