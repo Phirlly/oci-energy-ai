@@ -8,7 +8,7 @@ from deployment.configuration import DeploymentError
 from deployment.preflight import check_deployment_setup
 
 
-def resource_manager_client(environment):
+def deployment_identity(environment):
     if not check_deployment_setup(environment).complete:
         raise DeploymentError("Deployment configuration is incomplete or invalid; run Check deployment setup.")
     try:
@@ -23,6 +23,11 @@ def resource_manager_client(environment):
     config = {"region": environment["OCI_REGION"], "tenancy": environment["OCI_TENANCY_OCID"],
               "user": environment["OCI_USER_OCID"], "fingerprint": environment["OCI_FINGERPRINT"],
               "key_content": environment["OCI_PRIVATE_KEY"]}
+    return config, signer
+
+
+def resource_manager_client(environment):
+    config, signer = deployment_identity(environment)
     return ResourceManagerClient(
         config, signer=signer,
         timeout=(10, 30), retry_strategy=NoneRetryStrategy(),

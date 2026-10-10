@@ -1,0 +1,58 @@
+name: Verify model tool calls
+
+on:
+  workflow_dispatch:
+    inputs:
+      provider:
+        description: Check OCI and configured external providers, or one provider
+        type: choice
+        options: [configured, oci, openai, anthropic]
+        default: configured
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oci-energy-ai-foundation
+  cancel-in-progress: false
+
+jobs:
+  models:
+    if: github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment:
+      name: demo
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: '0.12.19'
+          enable-cache: false
+      - run: uv sync --locked --no-dev
+      - run: uv pip check --python .venv/bin/python
+      - run: uv audit --locked --no-dev
+      - run: uv run --no-sync python -m unittest discover -s tests -t . -v
+      - name: Verify public sample
+        env:
+          MODEL_PROVIDER: ${{ inputs.provider }}
+          DEPLOYMENT_ID: ${{ vars.DEPLOYMENT_ID }}
+          OCI_REGION: ${{ vars.OCI_REGION }}
+          OCI_COMPARTMENT_OCID: ${{ vars.OCI_COMPARTMENT_OCID }}
+          OCI_TENANCY_OCID: ${{ vars.OCI_TENANCY_OCID }}
+          OCI_USER_OCID: ${{ vars.OCI_USER_OCID }}
+          OCI_FINGERPRINT: ${{ vars.OCI_FINGERPRINT }}
+          OCI_PRIVATE_KEY: ${{ secrets.OCI_PRIVATE_KEY }}
+          OCI_PRIVATE_KEY_PASSPHRASE: ${{ secrets.OCI_PRIVATE_KEY_PASSPHRASE }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OCI_MODEL: ${{ vars.OCI_MODEL }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+          ANTHROPIC_MODEL: ${{ vars.ANTHROPIC_MODEL }}
+        run: uv run --no-sync python -m deployment.verify_models --provider "$MODEL_PROVIDER"

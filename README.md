@@ -1,9 +1,8 @@
 # OCI Energy AI
 
 A reusable electricity-bill and battery-scenario demo for OCI.
-**Available today:** offline calculations, a GitHub configuration check and
-Terraform foundation workflows. Agents, bill uploads and the browser application
-are pending.
+**Available today:** offline calculations, Terraform foundation workflows and
+GitHub model/tool verification. Bill uploads and the browser application are pending.
 
 ## Quick start
 
@@ -96,11 +95,26 @@ Confirm the selected region supports projects; IAM and quotas require live verif
    stack, waits for its plan, then applies that exact plan. Logs report recovery
    IDs and the bucket, namespace and project outputs. This creates the foundation;
    it does not launch the application or test models.
+5. Run **Verify model tool calls** with `configured` to check OCI and supplied
+   OpenAI/Anthropic keys, or select one provider. It reads the existing foundation
+   and sends only the public sample question and calculation results. Passing
+   requires actual tool execution and the expected amounts above. A configured
+   provider failure fails the workflow; absent optional keys are reported as skipped.
 
 A passing configuration check verifies formats and secret presence only.
-OpenAI/Anthropic keys are optional and unused by bootstrap; Vault delivery and
-provider verification are pending. Custom GitHub App deployment protection rules
+OpenAI/Anthropic keys are optional and unused by bootstrap. Vault delivery for the
+future OCI application is pending. Custom GitHub App deployment protection rules
 are incompatible with the configuration check; branch restrictions are supported.
+
+Model checks incur provider usage charges and require model access, including
+[OCI Responses permissions](https://docs.oracle.com/en-us/iaas/Content/generative-ai/get-started-agents.htm).
+Defaults are
+OCI `google.gemini-2.5-flash` (externally hosted through OCI in Ashburn), OpenAI
+`gpt-4.1-mini-2025-04-14` and Anthropic `claude-haiku-5-5`. Optional environment
+variables `OCI_MODEL`, `OPENAI_MODEL` and `ANTHROPIC_MODEL` select compatible models;
+there is no automatic fallback. Another region/model requires its own successful
+check. Each analysis is limited to 120 seconds, four model turns, two tool calls
+and 2,048 output tokens per request. Raw responses and traces are not published.
 
 ## Foundation recovery and cleanup
 

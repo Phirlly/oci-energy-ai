@@ -68,6 +68,19 @@ class ResourceManager:
                 raise DeploymentError("Stack is not usable; inspect its state before retrying.")
             self.deadline.pause()
 
+    def foundation_outputs(self):
+        """Read the current foundation without creating/updating resources or jobs."""
+        existing = self._discover()
+        if existing is None:
+            raise DeploymentError("No owned foundation found; run Bootstrap OCI foundation first.")
+        stack_id = existing.data.id
+        jobs = self.deadline.call(self.client.list_jobs, stack_id=stack_id,
+                                  sort_by="TIMECREATED", sort_order="DESC", limit=1).data
+        if (len(jobs) != 1 or jobs[0].stack_id != stack_id
+                or jobs[0].operation != "APPLY" or jobs[0].lifecycle_state != "SUCCEEDED"):
+            raise DeploymentError("Latest foundation job must be a successful APPLY; inspect the stack.")
+        return self.jobs.outputs(resource_id(jobs[0].id, "ormjob"), self.config.deployment_id)
+
     def apply(self, archive):
         existing = self._discover()
         encoded = base64.b64encode(archive).decode("ascii")

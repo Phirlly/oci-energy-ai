@@ -25,6 +25,8 @@ jobs:
           version: '0.12.19'
           enable-cache: false
       - run: uv sync --locked --no-dev
+      - run: uv pip check --python .venv/bin/python
+      - run: uv audit --locked --no-dev
       - run: uv run --no-sync python -m unittest discover -s tests -t . -v
       - run: uv run --no-sync python -m compileall -q energy_ai tools deployment
       - run: uv run --no-sync python -m energy_ai baseline
