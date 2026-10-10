@@ -63,10 +63,10 @@ test.describe('scripted provider browser contract', () => {
   test('proposal shows evidence and provider changes require renewed consent', async ({ page }) => {
     await login(page);
     await page.getByRole('button', { name: 'Try the example' }).click();
-    await expect(page.getByText('Model: gpt-4.1-mini-2025-04-14', { exact: false })).toBeVisible();
+    await expect(page.locator('.ai-panel').getByText('Model: gpt-4.1-mini-2025-04-14', { exact: false })).toBeVisible();
     const consent = page.getByLabel('Send this bill’s extracted text', { exact: false });
     await consent.check();
-    await page.getByLabel('AI provider').selectOption('anthropic');
+    await page.locator('.ai-panel').getByLabel('AI provider').selectOption('anthropic');
     await expect(consent).not.toBeChecked();
     await consent.check();
     await page.getByRole('button', { name: 'Extract with AI' }).click();
@@ -107,6 +107,7 @@ async function login(page) {
   await page.getByLabel('Launch code').fill('public-browser-test-code');
   await page.getByRole('button', { name: 'Start session' }).click();
   await expect(page.getByRole('heading', { name: 'Your electricity, understood.' })).toBeVisible();
+  await page.getByRole('button', { name: 'Review your bills', exact: true }).click();
 }
 
 test('prepared example can be corrected, approved, compared and deleted', async ({ page }) => {
@@ -186,6 +187,7 @@ for (const sample of [
     await page.getByRole('button', { name: 'Save corrections' }).click();
     await expect(page.getByRole('button', { name: 'Approve reviewed facts' })).toBeEnabled();
     await page.reload();
+    await page.getByRole('button', { name: 'Review your bills', exact: true }).click();
     await page.locator('.bill-row').getByRole('button').click();
     await expect(consumption).toHaveValue(sample.quantity);
     await expect(page.getByLabel('Usage unit')).toHaveValue(sample.unit);

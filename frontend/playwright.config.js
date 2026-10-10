@@ -14,6 +14,10 @@ export default defineConfig({
     env: { ENERGY_ACCESS_CODE: 'public-browser-test-code', OPENAI_API_KEY: '',
            ANTHROPIC_API_KEY: '', OCI_PROFILE: '' }
   }, {
+    command: '.venv/bin/python -m tests.fixtures.office_server',
+    cwd: '..', url: 'http://127.0.0.1:8767', reuseExistingServer: false,
+    env: { ENERGY_ACCESS_CODE: 'public-browser-test-code' }
+  }, {
     command: '.venv/bin/python -m tests.fixtures.web_server',
     cwd: '..', url: 'http://127.0.0.1:8766', reuseExistingServer: false,
     env: { ENERGY_ACCESS_CODE: 'public-browser-test-code' }

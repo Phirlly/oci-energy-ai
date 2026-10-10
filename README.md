@@ -1,11 +1,11 @@
 # OCI Energy AI
 
 An OCI demo for reviewing electricity bills and exploring battery scenarios.
-The **local browser app** supports bill upload, optional AI extraction, human
-review and deterministic insights. Terraform foundation and hosted model checks
+The **local browser app** connects a prepared office month, battery scenarios,
+two tool-using analysts and personal bill review. Terraform foundation and hosted model checks
 are available; the public OCI application deployment is still being built.
 
-## Try bill review
+## Try the demo
 
 Use **Linux or macOS**, **Python 3.12**, **Node 26.10.0** and [uv](https://docs.astral.sh/uv/getting-started/installation/).
 From the repository root:
@@ -19,9 +19,14 @@ cd ..
 uv run --no-sync python -m energy_ai.web
 ```
 
-Open the printed localhost URL and enter its launch code. Choose **Try the
-example**, review the fictional bill, approve it and calculate insights. No
-model key is needed for this flow.
+Open the printed localhost URL and enter its launch code. **Office demo** shows
+the prepared bill, downloadable illustrative PDF and demand chart. Adjust the
+battery and choose **Calculate scenario**; no model key is needed. Configured
+providers enable **Run analysts** after consent. **Technical view** shows actual
+tool activity and measured usage; public run history preserves the original settings.
+
+Choose **Review your bills → Try the example** to review, approve and calculate
+insights from a fictional bill, also without a model key.
 
 Upload one bill or up to 12 bills. Each must be an unencrypted text PDF, at most
 4 MiB, 20 nonempty text pages and 60,000 extracted characters; scanned bills need OCR first. Review actual
@@ -45,12 +50,14 @@ calculation. GitHub secrets are used by hosted checks, not downloaded to this ap
 Extraction allows one correction attempt, with at most two model invocations
 inside a shared 100-second deadline; unresolved facts still need manual review.
 
-This presenter binds to `127.0.0.1` with one worker. Work stays in process memory
-for a fixed 30-minute session and is discarded on sign-out, expiry or restart;
-original PDF bytes are discarded after parsing. Do not expose it publicly.
+This presenter binds to `127.0.0.1` with one worker and 30-minute sessions.
+Private bills stay in memory and clear on sign-out, expiry or restart; PDF bytes
+are discarded after parsing. Public office history is shared across presenters
+and stored in `runtime/office.sqlite3`, limited to 100 runs and 7 days. One office
+analysis runs at a time, with a 180-second deadline and cancellation. Do not expose it publicly.
 Linux parsing has a hard address-space limit; macOS uses a soft RSS watchdog
 that needs process-inspection permission. Public HTTPS hosting, Vault delivery
-and persistent runs are pending.
+are pending.
 
 ## Explore the office battery example
 
@@ -102,7 +109,7 @@ of uploaded-bill analysis.
    commit. Terraform runs through OCI Resource Manager and creates the owned
    private bucket and GenAI project. It does not launch the application.
 5. Run **Verify model tool calls → configured**. It checks real calculation-tool
-   execution and generic extraction of invented public bills through OCI and
+   execution, the two-analyst office workflow and extraction of invented public bills through OCI and
    configured external providers. Configured failures fail the run; missing
    optional keys are explicitly skipped. No personal bills are submitted.
 

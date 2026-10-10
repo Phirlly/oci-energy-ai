@@ -21,7 +21,7 @@ jobs:
   models:
     if: github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 45
     environment:
       name: demo
     steps:

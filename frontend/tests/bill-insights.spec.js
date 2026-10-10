@@ -6,6 +6,7 @@ test.beforeEach(async ({ page }) => {
   await page.getByLabel('Launch code').fill('public-browser-test-code');
   await page.getByRole('button', { name: 'Start session' }).click();
   await expect(page.getByRole('heading', { name: 'Your electricity, understood.' })).toBeVisible();
+  await page.getByRole('button', { name: 'Review your bills', exact: true }).click();
 });
 
 test.afterEach(async ({ page, baseURL }) => {

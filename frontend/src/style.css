@@ -1,5 +1,6 @@
 :root { font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #173c35; background: #f5f6f0; font-synthesis: none; line-height: 1.5; }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { margin: 0; }
 button, input, select { font: inherit; }
 button, .upload { cursor: pointer; }
@@ -83,6 +84,33 @@ blockquote { margin: 8px 0; border-left: 2px solid #9cba91; padding: 4px 9px; wh
 .welcome form button { white-space: nowrap; }
 footer { padding: 20px 24px; border-top: 1px solid #d8e1d6; text-align: center; color: #63745f; font-size: 11px; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
+.workspace-nav, .view-switch { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 22px; }
+button[aria-pressed="true"] { background: #17634e; border-color: #17634e; color: white; }
+.office-demo { display: grid; gap: 24px; }
+.office-overview { background: linear-gradient(120deg, #fff, #edf4e7); }
+.office-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.office-links { display: flex; flex-wrap: wrap; gap: 24px; margin: 22px 0; }
+a { color: #17634e; }
+.office-columns { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 24px; }
+.office-demo section { min-width: 0; }
+.office-demo details { margin-top: 20px; font-size: 13px; }
+.office-demo .primary { margin-top: 12px; }
+.office-demo p { overflow-wrap: anywhere; }
+.office-history > button { display: block; width: 100%; text-align: left; margin-top: 10px; font-size: 13px; }
+.office-events { padding-left: 22px; font-size: 12px; overflow-wrap: anywhere; }
+.office-events li { padding: 6px 0; }
+.office-events span, .office-events strong { display: block; }
+.office-events span { color: #5d6d62; }
+.demand-chart svg { display: block; width: 100%; margin: 20px 0; }
+.demand-chart text { fill: #51665d; font-size: 13px; }
+.chart-grid { stroke: #dce3d9; stroke-width: 1; }
+.chart-load { fill: none; stroke: #17634e; stroke-width: 2.5; }
+.chart-battery { fill: none; stroke: #b66a25; stroke-width: 2.5; stroke-dasharray: 6 3; }
+.table-scroll { max-height: 280px; overflow: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 12px; }
+th, td { padding: 8px; text-align: left; border-bottom: 1px solid #dce3d9; }
+@media (max-width: 900px) { .office-columns { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 680px) { .office-metrics { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 900px) { .workspace { grid-template-columns: 240px minmax(0, 1fr); gap: 18px; } section { padding: 20px; } .charge { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 680px) {
   header { padding: 16px; min-height: 70px; } .brand { font-size: 14px; } .header-right { gap: 4px; } .header-right .tag { display: none; }

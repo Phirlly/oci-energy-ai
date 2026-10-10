@@ -1,9 +1,11 @@
 """Explicit local provider configuration; runtime never discovers deployment state."""
 
 import os
+from contextlib import asynccontextmanager
 
 from energy_ai.agents.provider_clients import open_model
 from energy_ai.bills.extraction import extract_bill
+from energy_ai.agents.office_analysis import analyze_office
 
 
 def configured_providers(environment):
@@ -14,7 +16,8 @@ def configured_providers(environment):
     return configured
 
 
-async def extract_configured(provider, pages):
+@asynccontextmanager
+async def configured_model(provider):
     options = {"model_id": os.environ.get(f"{provider.upper()}_MODEL") or None}
     if provider == "oci":
         from oci.config import from_file, validate_config
@@ -28,4 +31,14 @@ async def extract_configured(provider, pages):
     else:
         options["api_key"] = os.environ.get(f"{provider.upper()}_API_KEY")
     async with open_model(provider, **options) as model:
+        yield model
+
+
+async def extract_configured(provider, pages):
+    async with configured_model(provider) as model:
         return await extract_bill(model, pages)
+
+
+async def analyze_configured(provider, controls, question, publish):
+    async with configured_model(provider) as model:
+        return await analyze_office(model, controls, question, publish)

@@ -14,11 +14,15 @@ from fastapi.staticfiles import StaticFiles
 from energy_ai.bills.review import ReviewError
 from energy_ai.agents.provider_clients import DEFAULT_MODELS
 from energy_ai.web.documents import document_routes
+from energy_ai.web.office import office_routes
+from energy_ai.office.runs import RunRepository
+from energy_ai.office.run_service import RunService
 from energy_ai.web.requests import Login, read_contract
 from energy_ai.web.sessions import Sessions, TTL
 
 
-def create_app(*, access_code, origin, providers=(), extractor=None, model_ids=None, clock=time.monotonic):
+def create_app(*, access_code, origin, providers=(), extractor=None, model_ids=None, clock=time.monotonic,
+               office_analyzer=None, office_database=':memory:'):
     parsed = urlsplit(origin)
     if (parsed.scheme != "http" or parsed.hostname != "127.0.0.1" or not parsed.port
             or parsed.path or parsed.query or parsed.fragment or parsed.username):
@@ -26,19 +30,26 @@ def create_app(*, access_code, origin, providers=(), extractor=None, model_ids=N
     if not isinstance(access_code, str) or len(access_code) < 12:
         raise ValueError("Use a launch code of at least 12 characters.")
     store = Sessions(clock)
+    models = {p: (model_ids or {}).get(p) or DEFAULT_MODELS[p] for p in providers}
 
     @asynccontextmanager
     async def lifespan(app):
+        repository = RunRepository(office_database)
+        app.state.office = RunService(repository, office_analyzer)
         async def cleanup():
             while True:
                 await asyncio.sleep(5)
                 store.prune()
         cleanup_task = asyncio.create_task(cleanup())
-        yield
-        cleanup_task.cancel()
-        for token in list(store.items):
-            store.close(token)
-        await asyncio.gather(cleanup_task, *store.tasks, return_exceptions=True)
+        try:
+            yield
+        finally:
+            cleanup_task.cancel()
+            for token in list(store.items):
+                store.close(token)
+            await asyncio.gather(cleanup_task, *store.tasks, return_exceptions=True)
+            await app.state.office.close()
+            repository.close()
 
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
     app.state.sessions = store
@@ -84,7 +95,7 @@ def create_app(*, access_code, origin, providers=(), extractor=None, model_ids=N
     @app.get("/api/session")
     async def session(request: Request):
         current = store.get(request.cookies.get("energy_session"))
-        return dict(providers=list(providers), models={p: (model_ids or {}).get(p) or DEFAULT_MODELS[p] for p in providers},
+        return dict(providers=list(providers), models=models,
                     expires_in=max(0, int(current.expires - clock())))
 
     @app.delete("/api/session")
@@ -95,6 +106,7 @@ def create_app(*, access_code, origin, providers=(), extractor=None, model_ids=N
         return response
 
     app.include_router(document_routes(store, providers, extractor))
+    app.include_router(office_routes(store, models, office_analyzer))
     assets = Path(__file__).resolve().parents[2] / "frontend" / "dist"
     if assets.is_dir():
         app.mount("/", StaticFiles(directory=assets, html=True), name="frontend")

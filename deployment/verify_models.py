@@ -2,6 +2,7 @@
 
 import argparse
 import asyncio
+from decimal import Decimal
 import json
 import logging
 import os
@@ -11,6 +12,8 @@ from deployment.configuration import DeploymentError
 from deployment.model_context import load_oci_model_context
 from energy_ai.agents.analysis import AnalysisError, EXPECTED, analyze_sample
 from energy_ai.agents.provider_clients import DEFAULT_MODELS, open_model
+from energy_ai.agents.office_analysis import analyze_office
+from energy_ai.office.sample import Controls
 
 GUIDANCE = {
     "configuration": "Check the selected provider's environment settings and model identifier.",
@@ -37,6 +40,9 @@ async def verify_provider(provider, environment):
         options = provider_options(provider, environment)
         async with open_model(provider, **options) as model:
             result = await analyze_sample(model)
+            office = await analyze_office(model, Controls(), 'evaluate_battery', lambda event: None)
+            if any(Decimal(office['savings'][name]) != Decimal(value) for name, value in EXPECTED.items()):
+                raise AnalysisError('verification', stage='sample_calculation')
         return {
             "provider": provider, "status": "passed",
             "model": options["model_id"] or DEFAULT_MODELS[provider],
@@ -44,6 +50,7 @@ async def verify_provider(provider, environment):
             "input_tokens": result.input_tokens, "output_tokens": result.output_tokens,
             "elapsed_seconds": round(time.monotonic() - started, 2),
             "amounts": {name: result.answer[name] for name in EXPECTED},
+            "office": {**office['usage'], "amounts": {name: office['savings'][name] for name in EXPECTED}},
         }
     except AnalysisError as error:
         category, guidance = error.category, str(error)
@@ -75,11 +82,12 @@ async def verify_selected(selection, environment, *, check=None):
 def _write_summary(path, results):
     with open(path, "a", encoding="utf-8") as summary:
         summary.write("## Public-sample model/tool verification\n\n")
-        summary.write("| Provider | Status | Tool calls | Model requests |\n| --- | --- | ---: | ---: |\n")
+        summary.write("| Provider | Status | Smoke tools / requests | Office tools / requests |\n| --- | --- | ---: | ---: |\n")
         for result in results:
             summary.write(f"| {result['provider']} | {result['status']} | "
-                          f"{result.get('tool_calls', '-')} | {result.get('model_requests', '-')} |\n")
-        summary.write("\nPassed means real tool execution and agreement with the independent sample amounts. "
+                          f"{result.get('tool_calls', '-')} / {result.get('model_requests', '-')} | "
+                          f"{result.get('office', {}).get('tool_calls', '-')} / {result.get('office', {}).get('model_requests', '-')} |\n")
+        summary.write("\nPassed means the fixed smoke check and two-analyst office workflow executed their tools and matched independent sample amounts. "
                       "Skipped providers were not tested. No application was deployed.\n")
 
 

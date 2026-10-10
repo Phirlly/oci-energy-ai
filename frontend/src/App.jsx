@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { api } from './api.js';
 import BillEditor from './BillEditor.jsx';
 import Insights from './Insights.jsx';
+import OfficeDemo from './OfficeDemo.jsx';
 
 export default function App() {
   const generation = useRef(0);
@@ -10,10 +11,12 @@ export default function App() {
   const [draft, setDraft] = useState(null), [dirty, setDirty] = useState(false);
   const [checked, setChecked] = useState([]), [result, setResult] = useState(null);
   const [error, setError] = useState(''), [busy, setBusy] = useState(false);
+  const [view, setView] = useState('office');
   const doc = docs.find(item => item.id === selected);
   function clear() {
     generation.current += 1;
     setSession(null); setDocs([]); setSelected(null); setDraft(null); setChecked([]); setResult(null); setDirty(false);
+    setView('office');
   }
   function handle(error) {
     if (error.stale) return;
@@ -83,12 +86,18 @@ export default function App() {
           <label>Launch code<input type="password" autoComplete="off" required value={code} onChange={e => setCode(e.target.value)} /></label>
           <button className="primary" disabled={busy}>Start session</button>
         </form>
-        <p className="muted">Use the code printed by the local server. Work is kept in memory for 30 minutes and cleared on sign-out or restart.</p>
+        <p className="muted">Use the code provided by your presenter. Private bills clear on sign-out, session expiry or restart. Public office history is shared and retained for 7 days, up to 100 runs.</p>
       </section> : <>
-        <div className="hero"><div><p className="eyebrow">Bill intelligence / Human reviewed</p>
-          <h1>Your electricity, understood.</h1><p>One bill or a year of bills. See the facts, review them, then explore what they tell you.</p></div>
+        <div className="hero"><div><p className="eyebrow">Energy intelligence / From evidence to insight</p>
+          <h1>Your electricity, understood.</h1><p>Explore a prepared office month or review your own electricity bills.</p></div>
           <span className="session-note">{Math.ceil(session.expires_in / 60)} min remaining</span></div>
-        <div className="workspace">
+        <nav className="workspace-nav" aria-label="Workspace">
+          <button aria-pressed={view === 'office'} disabled={dirty || busy} onClick={() => setView('office')}>Office demo</button>
+          <button aria-pressed={view === 'bills'} disabled={busy} onClick={() => setView('bills')}>Review your bills</button>
+          {dirty && <span className="muted">Save corrections before switching.</span>}
+        </nav>
+        <div hidden={view !== 'office'}><OfficeDemo session={session} request={request} handle={handle} /></div>
+        <div className="workspace" hidden={view !== 'bills'}>
           <aside>
             <section className="intake"><p className="eyebrow">01 / Bring your bills</p><h2>Start with a statement</h2>
               <label className="upload">Upload bill PDFs<input aria-label="Upload bill PDFs" type="file" accept=".pdf,application/pdf" multiple disabled={busy || dirty}
