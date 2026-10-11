@@ -81,6 +81,56 @@ class DeploymentSetupTests(unittest.TestCase):
         self.assertTrue(check_deployment_setup(self.environment).complete)
 
 
+class ApplicationSetupTests(unittest.TestCase):
+    def setUp(self):
+        self.environment = configured_environment() | {"DEMO_PASSWORD": "fictional-password-123456"}
+
+    def test_application_requires_password_without_changing_foundation_mode(self):
+        environment = configured_environment()
+        self.assertTrue(check_deployment_setup(environment).complete)
+        report = check_deployment_setup(environment, application=True)
+        self.assertFalse(report.complete)
+        missing = [check.setting for check in report.checks if check.status == "missing"]
+        self.assertEqual(missing, ["DEMO_PASSWORD"])
+        self.assertTrue(check_deployment_setup(self.environment, application=True).complete)
+
+    def test_password_exact_boundaries_and_character_restrictions(self):
+        cases = [("!" * 24, True), ("~" * 200, True), ("x" * 23, False),
+                 ("x" * 201, False), ("x" * 24 + " ", False), ("x" * 24 + "\n", False),
+                 ("x" * 24 + "\x7f", False), ("x" * 24 + "é", False), (True, False)]
+        for value, accepted in cases:
+            with self.subTest(value_type=type(value).__name__, accepted=accepted):
+                report = check_deployment_setup(self.environment | {"DEMO_PASSWORD": value}, application=True)
+                self.assertEqual(report.complete, accepted)
+                check = next(check for check in report.checks if check.setting == "DEMO_PASSWORD")
+                self.assertEqual(check.status, "format_accepted" if accepted else "invalid")
+
+    def test_optional_keys_accept_absence_and_reject_nonempty_invalid_content(self):
+        cases = [(None, "not_configured"), ("", "not_configured"), ("!", "format_accepted"),
+                 ("~" * 4096, "format_accepted"), ("x" * 4097, "invalid"),
+                 (" \n", "invalid"), ("key\t", "invalid"), ("keyé", "invalid"), (42, "invalid")]
+        for name in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY"):
+            for value, expected in cases:
+                with self.subTest(setting=name, expected=expected):
+                    report = check_deployment_setup(self.environment | {name: value}, application=True)
+                    check = next(check for check in report.checks if check.setting == name)
+                    self.assertEqual(check.status, expected)
+                    self.assertEqual(report.complete, expected != "invalid")
+                    self.assertIn("authentication", check.detail)
+
+    def test_application_report_is_private_and_does_not_mutate_environment(self):
+        environment = self.environment | {"OPENAI_API_KEY": "private-marker\n::error::hidden"}
+        original = dict(environment)
+        report = check_deployment_setup(environment, application=True)
+        self.assertFalse(report.complete)
+        rendered = format_setup_report(report)
+        self.assertEqual(environment, original)
+        for value in environment.values():
+            self.assertNotIn(value, rendered + repr(report))
+        self.assertNotIn("private-marker", rendered)
+        self.assertNotIn("::error::", rendered)
+
+
 class SetupReportPrivacyTests(unittest.TestCase):
     def test_report_contains_no_input_values_or_unrelated_settings(self):
         environment = {

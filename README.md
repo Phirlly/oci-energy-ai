@@ -103,10 +103,11 @@ of uploaded-bill analysis.
 | `OCI_PRIVATE_KEY` | Secret | Matching PEM signing key |
 | `OCI_PRIVATE_KEY_PASSPHRASE` | Secret | Only for an encrypted key |
 | `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` | Secrets | Optional external providers |
-| `DEMO_PASSWORD` | Secret | Browser login password, at least 24 random characters; used by the forthcoming application deployment |
+| `DEMO_PASSWORD` | Secret | Browser login password: 24–200 random printable ASCII characters without spaces; for application deployment |
 
-3. Run **Check deployment setup** on `dev` or validated `main`. This checks formats
-   and presence, not live permissions. Custom GitHub App deployment protection
+3. Run **Check deployment setup** on `dev` or validated `main`. This checks presence
+   and formats, including the browser password, without displaying secrets. It does
+   not authenticate credentials or check live permissions. Custom GitHub App deployment protection
    rules are incompatible with this check.
 4. After **Validate** passes, run **Bootstrap OCI foundation → apply** on the same
    commit. Terraform runs through OCI Resource Manager and creates the owned

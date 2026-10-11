@@ -30,6 +30,9 @@ _VARIABLE_GUIDANCE = {
 _OPTIONAL_SECRETS = (
     "OCI_PRIVATE_KEY_PASSPHRASE", "OPENAI_API_KEY", "ANTHROPIC_API_KEY",
 )
+_APPLICATION_SECRET_BOUNDS = {
+    "DEMO_PASSWORD": (24, 200), "OPENAI_API_KEY": (1, 4096), "ANTHROPIC_API_KEY": (1, 4096),
+}
 
 
 @dataclass(frozen=True)
@@ -54,7 +57,7 @@ def _absent(value):
     return value is None or isinstance(value, str) and not value.strip()
 
 
-def check_deployment_setup(environment: Mapping[str, str]) -> SetupReport:
+def check_deployment_setup(environment: Mapping[str, str], *, application=False) -> SetupReport:
     checks = []
     for setting, guidance in _VARIABLE_GUIDANCE.items():
         value = environment.get(setting)
@@ -72,8 +75,24 @@ def check_deployment_setup(environment: Mapping[str, str]) -> SetupReport:
             status = "invalid"
         checks.append(SetupCheck(setting, status, guidance))
 
-    for setting in ("OCI_PRIVATE_KEY", *_OPTIONAL_SECRETS):
+    settings = ("OCI_PRIVATE_KEY", *_OPTIONAL_SECRETS) + (("DEMO_PASSWORD",) if application else ())
+    for setting in settings:
         value = environment.get(setting)
+        if application and setting in _APPLICATION_SECRET_BOUNDS:
+            minimum, maximum = _APPLICATION_SECRET_BOUNDS[setting]
+            if value is None or value == "":
+                status = "missing" if setting == "DEMO_PASSWORD" else "not_configured"
+            elif (not isinstance(value, str) or not minimum <= len(value) <= maximum
+                  or any(not 33 <= ord(char) <= 126 for char in value)):
+                status = "invalid"
+            else:
+                status = "format_accepted"
+            guidance = (f"{minimum}-{maximum} printable ASCII characters without spaces; "
+                        "format only, authentication unverified.")
+            if setting == "DEMO_PASSWORD":
+                guidance += " Use a randomly generated password."
+            checks.append(SetupCheck(setting, status, guidance))
+            continue
         if _absent(value):
             status = "missing" if setting == "OCI_PRIVATE_KEY" else "not_configured"
         else:
@@ -103,8 +122,11 @@ def format_setup_report(report: SetupReport) -> str:
 
 
 def main():
-    argparse.ArgumentParser(description=__doc__).parse_args()
-    report = check_deployment_setup(os.environ)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--application", action="store_true",
+                        help="Also require the browser password and validate runtime credential formats.")
+    arguments = parser.parse_args()
+    report = check_deployment_setup(os.environ, application=arguments.application)
     print(format_setup_report(report))
     return 0 if report.complete else 2
 

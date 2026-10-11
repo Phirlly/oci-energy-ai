@@ -7,8 +7,10 @@ from contextlib import asynccontextmanager
 
 from oci.secrets.models import Base64SecretBundleContentDetails
 
+from deployment.preflight import check_deployment_setup
 from energy_ai.web.hosted_configuration import HostedConfiguration, RuntimeConfigurationError
 from energy_ai.web.hosted_runtime import HostedRuntime, load_runtime
+from tests.fixtures.deployment_environment import configured_environment
 from tests.fixtures.hosted_runtime import CONFIG, PASSWORD, SECRET, bundle
 
 
@@ -93,6 +95,37 @@ class VaultRuntimeTests(unittest.TestCase):
         with self.assertRaises(RuntimeConfigurationError):
             load_runtime(HostedConfiguration.from_bytes(json.dumps(CONFIG).encode()))
         self.client_factory.assert_not_called()
+
+    def test_application_preflight_matches_actual_vault_password_and_key_bounds(self):
+        cases = [('demo_password', 'DEMO_PASSWORD', '!' * 24, True),
+                 ('demo_password', 'DEMO_PASSWORD', '~' * 200, True),
+                 ('demo_password', 'DEMO_PASSWORD', 'x' * 23, False),
+                 ('demo_password', 'DEMO_PASSWORD', 'x' * 201, False),
+                 ('demo_password', 'DEMO_PASSWORD', 'x' * 24 + ' ', False),
+                 ('openai', 'OPENAI_API_KEY', '!', True),
+                 ('openai', 'OPENAI_API_KEY', '~' * 4096, True),
+                 ('openai', 'OPENAI_API_KEY', 'x' * 4097, False),
+                 ('anthropic', 'ANTHROPIC_API_KEY', 'key\n', False),
+                 ('anthropic', 'ANTHROPIC_API_KEY', 'keyé', False)]
+        for provider, setting, value, accepted in cases:
+            with self.subTest(setting=setting, accepted=accepted):
+                environment = configured_environment() | {'DEMO_PASSWORD': PASSWORD, setting: value}
+                self.assertEqual(check_deployment_setup(environment, application=True).complete, accepted)
+                configuration = CONFIG
+                if provider == 'demo_password':
+                    self.client.get_secret_bundle.side_effect = [bundle(value=value)]
+                else:
+                    secret_id = SECRET[:-1] + 'c'
+                    configuration = CONFIG | {'secret_ids': {'demo_password': SECRET, provider: secret_id}}
+                    self.client.get_secret_bundle.side_effect = [bundle(), bundle(secret_id=secret_id, value=value)]
+                parsed = HostedConfiguration.from_bytes(json.dumps(configuration).encode())
+                if accepted:
+                    runtime = load_runtime(parsed)
+                    self.assertEqual(runtime.password if provider == 'demo_password' else runtime.keys[provider], value)
+                    runtime.close()
+                else:
+                    with self.assertRaises(RuntimeConfigurationError):
+                        load_runtime(parsed)
 
 
 class HostedProviderTests(unittest.IsolatedAsyncioTestCase):

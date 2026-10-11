@@ -58,3 +58,16 @@ class DeploymentSetupCommandTests(unittest.TestCase):
         process = self.run_cli({}, "--help")
         self.assertEqual(process.returncode, 0, process.stderr)
         self.assertIn("configuration", process.stdout)
+
+    def test_application_mode_requires_password_and_does_not_print_it(self):
+        environment = configured_environment()
+        missing = self.run_cli(environment, "--application")
+        self.assertEqual(missing.returncode, 2)
+        self.assertIn("DEMO_PASSWORD | missing", missing.stdout)
+        for password, status in (("fixture-password-12345678", 0), ("private-short-marker", 2)):
+            with self.subTest(expected_exit=status):
+                result = self.run_cli(environment | {"DEMO_PASSWORD": password}, "--application")
+                self.assertEqual(result.returncode, status, result.stderr)
+                self.assertEqual(result.stderr, "")
+                self.assertIn("DEMO_PASSWORD", result.stdout)
+                self.assertNotIn(password, result.stdout)

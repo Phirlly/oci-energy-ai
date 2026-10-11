@@ -34,4 +34,5 @@ jobs:
           OCI_PRIVATE_KEY_PASSPHRASE: ${{ secrets.OCI_PRIVATE_KEY_PASSPHRASE }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: python -m deployment.preflight | tee -a "$GITHUB_STEP_SUMMARY"
+          DEMO_PASSWORD: ${{ secrets.DEMO_PASSWORD }}
+        run: python -m deployment.preflight --application | tee -a "$GITHUB_STEP_SUMMARY"
