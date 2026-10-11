@@ -39,8 +39,19 @@ class FirstRunApiTests(unittest.TestCase):
         self.assertEqual(self.client.get('/healthz').json()['status'], 'setup_required')
         self.assertEqual(self.client.post('/api/session', json={'code': 'admin'}).status_code, 503)
         self.assertEqual(self.client.get('/api/office').status_code, 401)
-        complete = self.client.post('/api/setup', json=BODY)
+        read = self.vault.get_secret_bundle
+        delayed = False
+        def content(*args, **kwargs):
+            nonlocal delayed
+            if self.vault.writes and not delayed:
+                delayed = True
+                raise TimeoutError('invented-private-detail')
+            return read(*args, **kwargs)
+        with patch.object(self.vault, 'get_secret_bundle', side_effect=content), patch.object(
+                self.runtime.settings, 'sleep', create=True) as pause:
+            complete = self.client.post('/api/setup', json=BODY)
         self.assertEqual(complete.status_code, 200, complete.text)
+        pause.assert_called_once_with(2)
         self.assertEqual(complete.json(), {'required': False})
         self.assertEqual(self.client.get('/api/session').status_code, 401)
         self.assertEqual(self.client.post('/api/session', json={'code': 'admin'}).status_code, 200)

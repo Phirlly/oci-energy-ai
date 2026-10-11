@@ -18,6 +18,13 @@ class SetupPersistenceTests(unittest.TestCase):
     def setUp(self):
         self.vault = MemoryVault()
         self.store = SetupSecrets(self.vault, self.vault, SECRET)
+        self.now, self.delays = 0, []
+        self.store.monotonic = lambda: self.now
+        self.store.sleep = self.advance
+
+    def advance(self, seconds):
+        self.delays.append(seconds)
+        self.now += seconds
 
     def test_claim_replaces_current_once_preserving_exact_password_and_optional_keys(self):
         password = ' énergie solaire ☀ '
@@ -49,12 +56,103 @@ class SetupPersistenceTests(unittest.TestCase):
 
     def test_lost_response_is_verified_without_replaying_the_write(self):
         original = self.vault.update_secret
+        pending = self.store.read()
+        read = self.store.read
         def committed(*args, **kwargs):
             original(*args, **kwargs)
             raise TimeoutError('private-marker')
-        with patch.object(self.vault, 'update_secret', side_effect=committed) as update:
+        outcomes = iter([pending, SetupError(), pending])
+        def delayed():
+            outcome = next(outcomes, None)
+            if isinstance(outcome, Exception):
+                raise outcome
+            return outcome or read()
+        with patch.object(self.vault, 'update_secret', side_effect=committed) as update, patch.object(
+                self.store, 'read', side_effect=delayed):
             self.assertEqual(self.store.complete(CODE, 'admin', {})['password'], 'admin')
         update.assert_called_once()
+        self.assertEqual(self.delays, [2, 2])
+
+    def test_delayed_metadata_is_confirmed_after_one_write(self):
+        original = self.vault.get_secret
+        after_write = 0
+        def metadata(*args, **kwargs):
+            nonlocal after_write
+            response = original(*args, **kwargs)
+            if self.vault.writes:
+                after_write += 1
+                if after_write <= 2:  # Update response, then the first confirmation read.
+                    response.data.lifecycle_state = 'UPDATING'
+            return response
+        with patch.object(self.vault, 'get_secret', side_effect=metadata):
+            self.assertEqual(self.store.complete(CODE, 'admin', {})['password'], 'admin')
+        self.assertEqual(self.delays, [2])
+        self.assertEqual(len(self.vault.writes), 1)
+
+    def test_unavailable_or_stale_bundle_is_never_accepted_as_confirmation(self):
+        original = self.vault.get_secret_bundle
+        failures = iter([ServiceError(404, 'NotFound', {}, 'private-marker'), 'PREVIOUS', 'CURRENT'])
+        def content(*args, **kwargs):
+            response = original(*args, **kwargs)
+            if self.vault.writes:
+                outcome = next(failures)
+                if isinstance(outcome, Exception):
+                    raise outcome
+                response.data.stages = [outcome]
+            return response
+        with patch.object(self.vault, 'get_secret_bundle', side_effect=content):
+            self.assertEqual(self.store.complete(CODE, 'admin', {})['password'], 'admin')
+        self.assertEqual(self.delays, [2, 2])
+        self.assertEqual(len(self.vault.writes), 1)
+
+    def test_persistent_invalid_bundle_exhausts_confirmation_window_privately(self):
+        original = self.vault.get_secret_bundle
+        def content(*args, **kwargs):
+            response = original(*args, **kwargs)
+            if self.vault.writes:
+                response.data.secret_id = SECRET + 'private-marker'
+            return response
+        with patch.object(self.vault, 'get_secret_bundle', side_effect=content) as read:
+            with self.assertRaises(SetupError) as raised:
+                self.store.complete(CODE, 'admin', {})
+        self.assertEqual(raised.exception.status, 503)
+        self.assertNotIn('private-marker', str(raised.exception))
+        self.assertEqual(read.call_count, 16)  # Initial authentication plus 15 confirmations.
+        self.assertEqual(self.now, 30)
+        self.assertEqual(self.delays, [2] * 15)
+        self.assertEqual(len(self.vault.writes), 1)
+
+    def test_confirmation_attempt_limit_applies_even_if_clock_does_not_advance(self):
+        pending = self.store.read()
+        self.store.sleep = self.delays.append
+        with patch.object(self.store, 'read', return_value=pending) as read:
+            with self.assertRaises(SetupError):
+                self.store.complete(CODE, 'admin', {})
+        self.assertEqual(read.call_count, 17)  # Authentication plus at most 16 confirmations.
+        self.assertEqual(self.delays, [2] * 15)
+        self.assertEqual(len(self.vault.writes), 1)
+
+    def test_slow_confirmation_or_sleep_cannot_admit_a_read_after_deadline(self):
+        for slow_read in (True, False):
+            with self.subTest(slow_read=slow_read):
+                self.vault = MemoryVault()
+                self.store = SetupSecrets(self.vault, self.vault, SECRET)
+                self.now, self.delays = 0, []
+                self.store.monotonic = lambda: self.now
+                self.store.sleep = self.advance
+                pending = self.store.read()
+                def read():
+                    if self.vault.writes and slow_read:
+                        self.now += 31
+                    return pending
+                if not slow_read:
+                    self.store.sleep = lambda seconds: self.advance(seconds + 30)
+                with patch.object(self.store, 'read', side_effect=read) as confirm:
+                    with self.assertRaises(SetupError):
+                        self.store.complete(CODE, 'admin', {})
+                self.assertEqual(confirm.call_count, 2)
+                self.assertEqual(len(self.vault.writes), 1)
+                self.assertEqual(self.delays, [] if slow_read else [32])
 
     def test_escaped_maximum_keys_cannot_commit_a_payload_that_exceeds_read_limit(self):
         keys = {'openai': '"' * 4096, 'anthropic': '"' * 4096}

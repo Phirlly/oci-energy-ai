@@ -4,6 +4,7 @@ import base64
 from dataclasses import dataclass
 import hmac
 import json
+import time
 
 from oci.retry import NoneRetryStrategy
 from oci.vault.models import Base64SecretContentDetails, UpdateSecretDetails
@@ -57,8 +58,9 @@ def _payload(raw, marker):
 
 
 class SetupSecrets:
-    def __init__(self, vault, bundles, secret_id):
+    def __init__(self, vault, bundles, secret_id, *, monotonic=time.monotonic, sleep=time.sleep):
         self.vault, self.bundles, self.secret_id = vault, bundles, secret_id
+        self.monotonic, self.sleep = monotonic, sleep
 
     def read(self):
         try:
@@ -103,13 +105,28 @@ class SetupSecrets:
                                      retry_strategy=NoneRetryStrategy())
         except Exception:
             pass  # A lost response can mean committed; inspect, never replay the write.
-        current = self.read().value
-        if 'password' not in current:
-            raise SetupError()
+        current = self._confirm_completion()
         actual = json.dumps(current, sort_keys=True, separators=(',', ':')).encode()
         if not hmac.compare_digest(actual, encoded):
             raise AlreadyConfigured(current)
         return current
+
+    def _confirm_completion(self):
+        deadline = self.monotonic() + 30
+        for attempt in range(16):
+            if attempt and self.monotonic() >= deadline:
+                break
+            try:
+                current = self.read().value
+                if 'password' in current:
+                    return current
+            except SetupError:
+                pass  # Accepted writes can precede readable, coherent CURRENT content.
+            remaining = deadline - self.monotonic()
+            if attempt == 15 or remaining <= 0:
+                break
+            self.sleep(min(2, remaining))
+        raise SetupError()
 
     def close(self):
         for client in (self.vault, self.bundles):
