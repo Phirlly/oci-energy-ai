@@ -138,6 +138,7 @@ Defaults: OCI `google.gemini-2.5-flash` (through OCI in Ashburn), OpenAI
 `gpt-4.1-mini-2025-04-14`, Anthropic `claude-haiku-5-5`. Optional variables
 `OCI_MODEL`, `OPENAI_MODEL`, `ANTHROPIC_MODEL` select alternatives. Missing external
 keys give an OCI-only deployment; configured providers must pass verification.
+For the verified bill examples, set `OPENAI_MODEL=gpt-4.1-2025-04-14`.
 
 Use **apply** again to update code, models or credentials. **rollback** activates
 the previous compatible release using current Vault credentials. Public office
