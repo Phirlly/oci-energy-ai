@@ -3,7 +3,7 @@ import json
 import unittest
 from unittest.mock import patch
 
-from agents import Runner
+from agents import AgentOutputSchema, Runner
 from agents.exceptions import AgentsException
 from pydantic import ValidationError
 from pydantic_core import PydanticCustomError
@@ -34,6 +34,8 @@ class BillAgentContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(output_schema.is_plain_text())
         self.assertTrue(output_schema.is_strict_json_schema())
         schema = output_schema.json_schema()
+        self.assertNotIn("maxItems", schema["properties"]["charges"])
+        self.assertEqual(AgentOutputSchema.json_schema(output_schema)["properties"]["charges"]["maxItems"], 40)
         supplier = schema["properties"]["supplier"]
         self.assertIn("supplier", schema["required"])
         self.assertIn({"type": "null"}, supplier["anyOf"])
@@ -41,6 +43,16 @@ class BillAgentContractTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn(rule, supplier.get("description", ""))
         self.assertEqual(result.candidate.facts.supplier, "Juniper Power")
         self.assertEqual(result.candidate.evidence["supplier"].quote, TEXT)
+
+    async def test_forty_sourced_charges_are_accepted_without_truncation(self):
+        data = proposal()
+        data["charges"] *= 8
+        model = ScriptedModel([[message(data)]])
+        result = await extract_bill(model, [TEXT])
+        self.assertEqual(len(result.candidate.facts.charges), 40)
+        self.assertEqual(result.candidate.evidence["charges.39"].quote, TEXT)
+        self.assertEqual(result.candidate.evidence["charges.39"].offset, 0)
+        self.assertEqual((len(model.requests), result.requests), (1, 1))
 
     async def test_supplier_names_and_source_quotes_are_preserved_without_postprocessing(self):
         for name in ("Statement Electric Co., Ltd.", "North & West Power Cooperative", None):
@@ -260,6 +272,28 @@ class BillSchemaFeedbackTests(unittest.IsolatedAsyncioTestCase):
 
 
 class BillCorrectionBoundsTests(unittest.IsolatedAsyncioTestCase):
+    async def test_oversized_charge_list_requires_valid_correction_without_truncation(self):
+        oversized = proposal()
+        oversized["charges"] = oversized["charges"] * 8 + oversized["charges"][:1]
+        expected = dict(issues=[dict(field="charges", reason="length")], truncated=False)
+        for corrected in (True, False):
+            model = ScriptedModel([[message(oversized)],
+                                   [message(proposal() if corrected else oversized)]])
+            with self.subTest(corrected=corrected):
+                if corrected:
+                    result = await extract_bill(model, [TEXT])
+                    self.assertEqual(len(result.candidate.facts.charges), 5)
+                    self.assertEqual((result.requests, result.input_tokens, result.output_tokens), (2, 20, 40))
+                else:
+                    with self.assertRaises(ExtractionError) as caught:
+                        await extract_bill(model, [TEXT])
+                    self.assertEqual(caught.exception.category, "schema")
+                    self.assertEqual(caught.exception.diagnostics, expected)
+                self.assertEqual(len(model.requests), 2)
+                feedback = json.loads(model.requests[1]["input"][0]["content"])
+                self.assertEqual(feedback["document_pages"], [{"page": 1, "text": TEXT}])
+                self.assertEqual(feedback["validation_feedback"], dict(category="schema", diagnostics=expected))
+
     async def test_empty_or_missing_final_text_fails_safely_after_one_call(self):
         blank = message()
         blank.content[0].text = ""

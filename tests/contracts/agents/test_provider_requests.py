@@ -3,6 +3,7 @@ import unittest
 from unittest.mock import patch
 
 import httpx
+from agents import AgentOutputSchema
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from oci.signer import Signer
@@ -53,6 +54,7 @@ class ResponsesContractTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_bill_schema_is_sent_through_openai_and_signed_oci_responses(self):
         from energy_ai.bills.extraction import extract_bill
+        from energy_ai.bills.proposal import BillProposal
         from tests.fixtures.bills import proposal, TEXT
         key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
         pem = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
@@ -76,6 +78,10 @@ class ResponsesContractTests(unittest.IsolatedAsyncioTestCase):
                 format = body["text"]["format"]
                 self.assertEqual(format["type"], "json_schema")
                 self.assertTrue(format["strict"])
+                original = AgentOutputSchema(BillProposal).json_schema()
+                self.assertEqual(original["properties"]["charges"].pop("maxItems"), 40)
+                self.assertEqual(format["schema"], original)
+                self.assertEqual(BillProposal.model_json_schema()["properties"]["charges"]["maxItems"], 40)
                 self.assertEqual(set(format["schema"]["required"]), set(proposal()))
                 self.assertNotIn("offset", json.dumps(format["schema"]))
                 self.assertNotIn("marker", json.dumps(format["schema"]))

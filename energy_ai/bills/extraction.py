@@ -1,6 +1,7 @@
 """Bounded, tool-free bill extraction with one validation-guided correction."""
 
 import asyncio
+from copy import deepcopy
 from dataclasses import dataclass
 import json
 import re
@@ -167,6 +168,12 @@ class _BillOutputSchema(AgentOutputSchema):
     def __init__(self, pages):
         super().__init__(BillProposal)
         self.pages = pages
+
+    def json_schema(self):
+        schema = deepcopy(super().json_schema())
+        # OCI Gemini rejects this bill schema with maxItems; enforce max40 locally.
+        del schema["properties"]["charges"]["maxItems"]
+        return schema
 
     def validate_json(self, text):
         try:
