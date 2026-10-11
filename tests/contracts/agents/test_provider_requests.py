@@ -9,6 +9,7 @@ from oci.signer import Signer
 
 from energy_ai.agents.analysis import AnalysisError, analyze_sample
 from energy_ai.agents.provider_clients import open_model
+from energy_ai.agents.instance_auth import InstanceAuth
 from tests.fixtures.agent_responses import ANSWER, PARAMETERS, message, tool_call
 from tests.fixtures.resource_manager import PROJECT_ID
 
@@ -126,3 +127,22 @@ class ResponsesContractTests(unittest.IsolatedAsyncioTestCase):
                 with self.assertRaises(ValueError):
                     async with open_model(provider, **options):
                         self.fail("Invalid configuration accepted.")
+
+    async def test_explicit_instance_auth_is_used_and_cannot_be_combined_with_fixed_signer(self):
+        signed = []
+        def signer(request):
+            signed.append(request)
+            request.headers['authorization'] = 'Signature fixture-instance'
+            return request
+        auth = InstanceAuth(signer)
+        self.addCleanup(auth.close)
+        def respond(request):
+            self.assertEqual(request.headers['authorization'], 'Signature fixture-instance')
+            return httpx.Response(200, json=response_body([tool_call()] if len(signed) == 1 else [message()]))
+        options = dict(oci_region='us-ashburn-1', oci_project=PROJECT_ID, oci_auth=auth)
+        async with open_model('oci', **options, transport=httpx.MockTransport(respond)) as model:
+            self.assertEqual((await analyze_sample(model)).tool_calls, 1)
+        self.assertEqual(len(signed), 2)
+        with self.assertRaises(ValueError):
+            async with open_model('oci', **options, oci_signer=signer):
+                self.fail('Ambiguous identity accepted.')

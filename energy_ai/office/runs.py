@@ -5,6 +5,12 @@ import sqlite3
 import time
 from uuid import uuid4
 
+SCHEMA_VERSION = 1
+_SCHEMA = '''CREATE TABLE office_runs (
+    id TEXT PRIMARY KEY, request_key TEXT UNIQUE NOT NULL,
+    created REAL NOT NULL, payload TEXT NOT NULL, status TEXT NOT NULL,
+    events TEXT NOT NULL DEFAULT '[]', result TEXT, error TEXT)'''
+
 
 class RunError(Exception):
     pass
@@ -15,14 +21,27 @@ class RunRepository:
         self.clock = clock
         self.db = sqlite3.connect(path)
         self.db.row_factory = sqlite3.Row
-        self.db.execute('''CREATE TABLE IF NOT EXISTS office_runs (
-            id TEXT PRIMARY KEY, request_key TEXT UNIQUE NOT NULL,
-            created REAL NOT NULL, payload TEXT NOT NULL, status TEXT NOT NULL,
-            events TEXT NOT NULL DEFAULT '[]', result TEXT, error TEXT)''')
-        with self.db:
-            self.db.execute("UPDATE office_runs SET status='interrupted', error=? WHERE status='running'",
-                            ('Application restarted before the run completed.',))
-        self.prune()
+        try:
+            with self.db:
+                self.db.execute('BEGIN IMMEDIATE')
+                version = self.db.execute('PRAGMA user_version').fetchone()[0]
+                objects = [tuple(row) for row in self.db.execute('SELECT type,name,tbl_name,sql FROM sqlite_master')]
+                expected = [('table', 'office_runs', 'office_runs', ' '.join(_SCHEMA.split())),
+                            ('index', 'sqlite_autoindex_office_runs_1', 'office_runs', None),
+                            ('index', 'sqlite_autoindex_office_runs_2', 'office_runs', None)]
+                normalized = [(kind, name, table, ' '.join(sql.split()) if sql else None)
+                              for kind, name, table, sql in objects]
+                if version not in (0, SCHEMA_VERSION) or (normalized and set(normalized) != set(expected)) or (version and not objects):
+                    raise RunError('Public history schema is incompatible with this application release.')
+                if not objects:
+                    self.db.execute(_SCHEMA)
+                self.db.execute('PRAGMA user_version=1')
+                self.db.execute("UPDATE office_runs SET status='interrupted', error=? WHERE status='running'",
+                                ('Application restarted before the run completed.',))
+            self.prune()
+        except Exception:
+            self.db.close()
+            raise
 
     def close(self):
         self.db.close()

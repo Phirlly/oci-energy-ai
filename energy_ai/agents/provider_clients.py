@@ -25,7 +25,7 @@ class FixedSignerAuth(HttpxOciAuth):
 
 @asynccontextmanager
 async def open_model(provider, *, api_key=None, model_id=None, oci_region=None,
-                     oci_project=None, oci_signer=None, transport=None):
+                     oci_project=None, oci_signer=None, oci_auth=None, transport=None):
     if provider not in DEFAULT_MODELS:
         raise ValueError("Unknown provider.")
     model_id = DEFAULT_MODELS[provider] if model_id is None else model_id
@@ -37,9 +37,9 @@ async def open_model(provider, *, api_key=None, model_id=None, oci_region=None,
         if (not isinstance(oci_region, str) or not re.fullmatch(r"[a-z]{2,3}-[a-z0-9-]+-[1-9][0-9]?", oci_region)
                 or not isinstance(oci_project, str)
                 or not re.fullmatch(r"ocid1\.generativeaiproject\.oc1\.[a-z0-9-]+\.[a-z0-9.]{20,255}", oci_project)
-                or oci_signer is None):
+                or (oci_signer is None) == (oci_auth is None)):
             raise ValueError("OCI region, project and signing identity are required.")
-        auth, project, api_key = FixedSignerAuth(oci_signer), oci_project, "not-used"
+        auth, project, api_key = oci_auth if oci_auth is not None else FixedSignerAuth(oci_signer), oci_project, "not-used"
         endpoint = f"https://inference.generativeai.{oci_region}.oci.oraclecloud.com/openai/v1"
     else:
         if not isinstance(api_key, str) or not api_key.strip():

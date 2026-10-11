@@ -2,6 +2,8 @@ import asyncio
 from pathlib import Path
 import tempfile
 import unittest
+import sqlite3
+import json
 
 from energy_ai.agents.analysis import AnalysisError
 from energy_ai.office.runs import RunError, RunRepository
@@ -12,6 +14,46 @@ PAYLOAD = dict(provider='openai', model='fixture-model', controls=Controls().mod
 
 
 class RunRepositoryTests(unittest.TestCase):
+    def test_version_zero_history_is_adopted_and_versioned(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'history.db'
+            connection = sqlite3.connect(path)
+            # Independent pre-versioning schema from a5e35cb; do not build with RunRepository.
+            connection.execute('''CREATE TABLE office_runs (
+                id TEXT PRIMARY KEY, request_key TEXT UNIQUE NOT NULL,
+                created REAL NOT NULL, payload TEXT NOT NULL, status TEXT NOT NULL,
+                events TEXT NOT NULL DEFAULT '[]', result TEXT, error TEXT)''')
+            connection.executemany('INSERT INTO office_runs VALUES(?,?,?,?,?,?,?,?)', [
+                ('finished', 'previous', 1000, json.dumps(PAYLOAD), 'complete', '[]', '{"value":"public"}', None),
+                ('unfinished', 'pending', 1001, json.dumps(PAYLOAD), 'running', '[]', None, None)])
+            connection.commit()
+            connection.close()
+            store = RunRepository(path, clock=lambda: 1002)
+            try:
+                self.assertEqual(store.get('finished')['result'], {'value': 'public'})
+                self.assertEqual(store.get('unfinished')['status'], 'interrupted')
+                self.assertEqual(store.db.execute('PRAGMA user_version').fetchone()[0], 1)
+            finally:
+                store.close()
+
+    def test_incompatible_schema_is_rejected_without_changing_database(self):
+        with tempfile.TemporaryDirectory() as directory:
+            for mutation in ('PRAGMA user_version=2', 'ALTER TABLE office_runs ADD COLUMN future TEXT',
+                             'CREATE TABLE unrelated (id TEXT)', 'PRAGMA user_version=-1'):
+                with self.subTest(mutation=mutation):
+                    path = Path(directory) / f'history-{len(list(Path(directory).iterdir()))}.db'
+                    store = RunRepository(path)
+                    store.create('unfinished', PAYLOAD)
+                    store.close()
+                    connection = sqlite3.connect(path)
+                    connection.execute(mutation)
+                    connection.commit()
+                    connection.close()
+                    before = path.read_bytes()
+                    with self.assertRaisesRegex(RunError, 'schema'):
+                        RunRepository(path)
+                    self.assertEqual(path.read_bytes(), before)
+
     def test_reopen_preserves_results_and_interrupts_unfinished_work(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'runs.db'

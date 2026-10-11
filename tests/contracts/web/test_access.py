@@ -57,3 +57,36 @@ class SessionAccessTests(unittest.TestCase):
         self.login()
         response = self.client.post("/api/session", content='{"code": "PRIVATE", "extra": 2}', headers=HEADERS)
         self.assertNotIn("PRIVATE", response.text)
+
+
+class HostedAccessTests(unittest.TestCase):
+    def test_https_login_secure_cookie_health_and_forwarded_header_boundaries(self):
+        origin, backend, release = 'https://demo.example', '10.40.1.8:8080', 'a' * 40
+        password = 'public-fixture-password-123'
+        app = create_app(access_code=password, origin=origin, backend_host=backend, release=release)
+        with TestClient(app, base_url=origin, headers={'host': backend}) as client:
+            health = client.get('/healthz')
+            self.assertEqual(health.json(), {'status': 'ready', 'release': release, 'schema': 1})
+            headers = {'origin': origin, 'x-energy-action': '1'}
+            response = client.post('/api/session', json={'code': password}, headers=headers)
+            self.assertEqual(response.status_code, 200)
+            self.assertIn('; secure', response.headers['set-cookie'].lower())
+            self.assertEqual(response.headers['strict-transport-security'], 'max-age=31536000')
+            self.assertEqual(client.get('/api/session').status_code, 200)
+            self.assertEqual(client.get('/healthz', headers={'host': 'wrong.example',
+                'x-forwarded-host': backend, 'x-forwarded-proto': 'https'}).status_code, 403)
+            self.assertEqual(client.post('/api/session', json={'code': password}, headers={
+                **headers, 'origin': 'https://wrong.example', 'x-forwarded-host': 'demo.example'}).status_code, 403)
+            response = client.delete('/api/session', headers=headers)
+            self.assertIn('; secure', response.headers['set-cookie'].lower())
+            self.assertEqual(client.get('/api/session').status_code, 401)
+
+    def test_public_mode_rejects_unsafe_or_incomplete_configuration(self):
+        valid = dict(access_code='public-fixture-password-123', origin='https://demo.example',
+                     backend_host='10.40.1.8:8080', release='a' * 40)
+        for changed in ({'origin': 'http://demo.example'}, {'origin': 'https://demo.example/'},
+                        {'origin': 'https://user@demo.example'}, {'origin': 'https://demo.example:443'},
+                        {'backend_host': '203.0.113.1:8080'}, {'backend_host': '10.40.1.8:80'},
+                        {'release': '../private'}, {'access_code': CODE}, {'release': None}):
+            with self.subTest(changed=changed), self.assertRaises(ValueError):
+                create_app(**(valid | changed))
