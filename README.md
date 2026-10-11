@@ -5,7 +5,9 @@ The browser connects a prepared office month, battery scenarios, two tool-using
 analysts and personal bill review. Python/FastAPI and React run on OCI; the OpenAI
 Agents SDK orchestrates OCI, OpenAI and Anthropic model adapters.
 **Status:** OCI hosting, HTTPS login and office/bill checks through all three
-providers are verified. Deployment lifecycle rehearsal is in progress.
+providers are verified, along with update, rollback, restart and cleanup.
+Fresh provisioning required manual recovery; repeatability and an independent
+operator rehearsal remain open.
 
 ## Try the demo
 
@@ -113,6 +115,7 @@ of uploaded-bill analysis.
    image, applies Terraform through OCI Resource Manager, delivers credentials to
    Vault, and verifies HTTPS login and the prepared scenario. Open the reported
    URL and enter your `DEMO_PASSWORD`. No local API-key files are needed.
+   The host-readiness stage allows up to 30 minutes.
 5. Run **Deploy OCI demo → verify** to check public PDF upload/review and real
    office tools and bill extraction through every configured provider, followed
    by Chromium checks of login, battery scenarios, bill review and sign-out.
@@ -146,8 +149,13 @@ Use **destroy**, confirming the exact deployment ID, to stop the VM and remove
 the demo. This deletes public history and owned artifacts, schedules credentials
 for deletion, and retains the empty Resource Manager stack. Vault/key deletion
 follows OCI waiting periods. Unknown bucket objects or Vault children block
-cleanup. On timeout, inspect the reported jobs before retrying; cancellation
-alone does not establish that a remote operation stopped.
+cleanup. On timeout, inspect GitHub/OCI jobs and Run Commands before retrying;
+cancellation alone does not establish that a remote operation stopped.
+For a failed **apply**, once the blocking condition is resolved and remote
+operations have finished, re-run its failed deployment job to reuse the original
+commit and checked image
+(retained for seven days). Changed code or an unavailable image requires a new
+**apply** run and validation.
 
 ## Validation and private data
 
