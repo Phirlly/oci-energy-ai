@@ -21,6 +21,28 @@ def response_body(content, stop_reason="end_turn"):
 
 
 class AnthropicMessagesTests(unittest.IsolatedAsyncioTestCase):
+    async def test_bill_http_status_is_classified_without_exposing_body_or_retrying(self):
+        from energy_ai.bills.extraction import extract_bill, ExtractionError
+        from tests.fixtures.bills import TEXT
+        for status in (400, 500):
+            requests = []
+            def respond(request):
+                requests.append(request)
+                return httpx.Response(status, headers={"request-id": "private-marker"}, json={
+                    "type": "error", "error": {"type": "private-marker",
+                                              "message": "invalid schema pattern private-marker"}})
+            with self.subTest(status=status):
+                async with open_model("anthropic", api_key="secret-marker", transport=httpx.MockTransport(respond)) as model:
+                    with self.assertRaises(ExtractionError) as caught:
+                        await extract_bill(model, [TEXT])
+                expected = dict(kind="http_status", http_status=status, attempt=1, completed_responses=0)
+                if status == 400:
+                    expected["message_mentions"] = ["invalid", "pattern", "schema", "type"]
+                self.assertEqual(caught.exception.diagnostics, expected)
+                self.assertEqual(len(requests), 1)
+                self.assertIsNone(caught.exception.__context__)
+                self.assertNotIn("marker", str(caught.exception) + json.dumps(caught.exception.diagnostics))
+
     async def test_text_only_extraction_omits_tool_configuration(self):
         from energy_ai.bills.extraction import extract_bill
         from tests.fixtures.bills import proposal, TEXT

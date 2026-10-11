@@ -6,7 +6,9 @@ import json
 import re
 
 from agents import Agent, AgentOutputSchema, ModelSettings, RunConfig, RunHooks, Runner
-from agents.exceptions import AgentsException, ModelBehaviorError
+from agents.exceptions import AgentsException, MaxTurnsExceeded, ModelBehaviorError, ModelTimeoutError
+import anthropic
+import openai
 from pydantic import ValidationError
 
 from energy_ai.bills.proposal import BillProposal
@@ -62,6 +64,41 @@ class _BillOutputError(ModelBehaviorError):
     def __init__(self, error):
         self.category, self.diagnostics = error.category, error.diagnostics
         super().__init__("Bill output validation failed.")
+
+
+def _provider_diagnostics(error):
+    """Fixed metadata only; lexical mentions do not identify a failure's cause."""
+    kinds = (
+        ("timeout", (openai.APITimeoutError, anthropic.APITimeoutError, ModelTimeoutError)),
+        ("connection", (openai.APIConnectionError, anthropic.APIConnectionError)),
+        ("response_validation", (openai.APIResponseValidationError, anthropic.APIResponseValidationError)),
+        ("http_status", (openai.APIStatusError, anthropic.APIStatusError)),
+        ("turn_limit", (MaxTurnsExceeded,)), ("model_behavior", (ModelBehaviorError,)),
+    )
+    kind = next((name for name, classes in kinds if isinstance(error, classes)), "other")
+    result = dict(kind=kind)
+    if kind in {"http_status", "response_validation"}:
+        status = error.status_code
+        if type(status) is int and 100 <= status <= 599:
+            result["http_status"] = status
+    if isinstance(error, openai.APIStatusError):
+        for field, allowed in {
+            "code": {"invalid_request_error", "invalid_json_schema", "unsupported_parameter",
+                     "unsupported_value", "model_not_found", "rate_limit_exceeded", "insufficient_quota"},
+            "param": {"text.format", "text.format.schema", "response_format", "schema",
+                      "model", "max_output_tokens", "input"},
+        }.items():
+            value = getattr(error, field)
+            result[field] = value if value is None or type(value) is str and value in allowed else "other"
+    if kind == "http_status" and result.get("http_status") == 400:
+        text = error.message[:4096] if type(error.message) is str else ""
+        terms = ("schema", "$defs", "$ref", "additionalProperties", "anyOf", "oneOf", "type",
+                 "enum", "format", "pattern", "minimum", "maximum", "minLength", "maxLength",
+                 "minItems", "maxItems", "properties", "items", "required", "response_format",
+                 "text.format", "unsupported", "invalid")
+        result["message_mentions"] = sorted(term for term in terms
+            if re.search(r"(?<![\w$])" + re.escape(term) + r"(?!\w)", text, re.IGNORECASE))
+    return result
 
 
 @dataclass(frozen=True)
@@ -140,11 +177,13 @@ class _BillOutputSchema(AgentOutputSchema):
 
 @dataclass
 class _BillUsage(RunHooks):
+    responses: int = 0
     requests: int = 0
     input_tokens: int = 0
     output_tokens: int = 0
 
     async def on_llm_end(self, context, agent, response):
+        self.responses += 1
         self.requests += response.usage.requests
         self.input_tokens += response.usage.input_tokens
         self.output_tokens += response.usage.output_tokens
@@ -158,10 +197,12 @@ async def extract_bill(model, pages, *, timeout=100):
                   model_settings=ModelSettings(max_tokens=7000, timeout=60, store=False))
     payload = {"document_pages": [{"page": i + 1, "text": text} for i, text in enumerate(pages)]}
     usage = _BillUsage()
+    attempt = 0
     try:
         async with asyncio.timeout(min(timeout, 100)):
-            for attempt in range(2):
+            for index in range(2):
                 try:
+                    attempt = index + 1
                     result = await Runner.run(agent, json.dumps(payload), max_turns=1, hooks=usage,
                         run_config=RunConfig(tracing_disabled=True, trace_include_sensitive_data=False))
                 except _BillOutputError as error:
@@ -169,7 +210,7 @@ async def extract_bill(model, pages, *, timeout=100):
                     failure = ExtractionError(error.category, error.diagnostics)
                 else:
                     return ExtractionResult(result.final_output, usage.requests, usage.input_tokens, usage.output_tokens)
-                if attempt or failure.category not in {"json", "schema", "evidence_keys", "evidence_quote"}:
+                if index or failure.category not in {"json", "schema", "evidence_keys", "evidence_quote"}:
                     raise failure from None
                 payload["validation_feedback"] = dict(category=failure.category, diagnostics=failure.diagnostics)
     except ExtractionError:
@@ -179,5 +220,6 @@ async def extract_bill(model, pages, *, timeout=100):
     except Exception as error:
         if isinstance(error, AgentsException):
             error.run_data = None
-        failure = ExtractionError("provider")
+        failure = ExtractionError("provider", dict(_provider_diagnostics(error),
+                                  attempt=attempt, completed_responses=usage.responses))
     raise failure from None

@@ -52,6 +52,27 @@ class PublicBillVerificationTests(unittest.TestCase):
         self.assertNotIn("secret-marker", output.getvalue() + errors.getvalue())
 
     @patch("deployment.verify_bills.open_model")
+    def test_provider_diagnostics_reach_failed_report_without_raw_details(self, factory):
+        import openai
+        import httpx2
+        request = httpx2.Request("POST", "https://private-marker.invalid")
+        @asynccontextmanager
+        async def opened(*args, **kwargs):
+            yield ScriptedModel([openai.BadRequestError("invalid schema private-marker",
+                response=httpx2.Response(400, request=request, headers={"x-request-id": "secret-marker"}),
+                body={"code": "invalid_json_schema", "param": "text.format"})])
+        factory.side_effect = opened
+        output, errors = io.StringIO(), io.StringIO()
+        with redirect_stdout(output), redirect_stderr(errors):
+            code = main(["--provider", "openai"], environment={"OPENAI_API_KEY": "secret-marker"})
+        report = json.loads(output.getvalue())["providers"][0]
+        self.assertEqual((code, report["status"], report["stage"]), (1, "failed", "extraction_provider"))
+        self.assertEqual(report["diagnostics"], dict(kind="http_status", http_status=400,
+            code="invalid_json_schema", param="text.format", message_mentions=["invalid", "schema"],
+            attempt=1, completed_responses=0))
+        self.assertNotIn("marker", output.getvalue() + errors.getvalue())
+
+    @patch("deployment.verify_bills.open_model")
     def test_supplier_mismatch_reports_only_boolean_shape_and_still_fails(self, factory):
         from energy_ai.bills.examples import EXAMPLES
         for supplier, absent, normalized, contains in (

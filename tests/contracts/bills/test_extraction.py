@@ -269,6 +269,7 @@ class BillCorrectionBoundsTests(unittest.IsolatedAsyncioTestCase):
                 await extract_bill(model, [TEXT])
             self.assertEqual(len(model.requests), 1)
             self.assertEqual(caught.exception.category, "provider")
+            self.assertEqual(caught.exception.diagnostics, dict(kind="turn_limit", attempt=1, completed_responses=1))
             self.assertIsNone(caught.exception.__context__)
             self.assertIsNone(caught.exception.__cause__)
 
@@ -295,11 +296,61 @@ class BillCorrectionBoundsTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("marker", str(caught.exception) + json.dumps(caught.exception.diagnostics))
 
     async def test_provider_error_does_not_start_a_correction(self):
-        model = ScriptedModel([RuntimeError("private-marker")])
+        for first in ([], [[message("invalid candidate")]]):
+            model = ScriptedModel(first + [RuntimeError("private-marker")])
+            with self.subTest(correction=bool(first)), self.assertRaises(ExtractionError) as caught:
+                await extract_bill(model, [TEXT])
+            self.assertEqual(caught.exception.category, "provider")
+            self.assertEqual(len(model.requests), 1 + len(first))
+            self.assertEqual(caught.exception.diagnostics,
+                             dict(kind="other", attempt=1 + len(first), completed_responses=len(first)))
+            self.assertIsNone(caught.exception.__context__)
+
+    async def test_sdk_failure_kinds_and_metadata_remain_bounded_and_private(self):
+        import anthropic
+        import openai
+        import httpx2
+        from agents.exceptions import ModelBehaviorError, ModelTimeoutError
+        request = httpx2.Request("POST", "https://private-marker.invalid", headers={"Authorization": "secret-marker"})
+        for sdk in (openai, anthropic):
+            cases = [(sdk.APIConnectionError(request=request, message="private-marker"), "connection"),
+                     (sdk.APITimeoutError(request=request), "timeout"),
+                     (sdk.APIResponseValidationError(response=httpx2.Response(200, request=request),
+                         body={"private-marker": "secret-marker"}), "response_validation"),
+                     (ModelBehaviorError("private-marker"), "model_behavior"),
+                     (ModelTimeoutError(60), "timeout")]
+            for error, kind in cases:
+                with self.subTest(sdk=sdk.__name__, kind=kind), self.assertRaises(ExtractionError) as caught:
+                    await extract_bill(ScriptedModel([error]), [TEXT])
+                expected = dict(kind=kind, attempt=1, completed_responses=0)
+                if kind == "response_validation":
+                    expected["http_status"] = 200
+                self.assertEqual(caught.exception.diagnostics, expected)
+                self.assertIsNone(caught.exception.__cause__)
+                self.assertIsNone(caught.exception.__context__)
+                self.assertNotIn("marker", str(caught.exception) + json.dumps(caught.exception.diagnostics))
+        for status, code, param, text in ((400, [], {}, {"private-marker": "secret-marker"}),
+                                        (True, "private-marker", "secret-marker", "schema"),
+                                        (999, None, None, "schema"),
+                                        (400, None, None, "x" * 4096 + " schema pattern private-marker")):
+            error = openai.BadRequestError("private-marker", response=httpx2.Response(400, request=request), body={})
+            error.status_code, error.code, error.param, error.message = status, code, param, text
+            with self.subTest(status=status, code=code), self.assertRaises(ExtractionError) as caught:
+                await extract_bill(ScriptedModel([error]), [TEXT])
+            expected = dict(kind="http_status", attempt=1, completed_responses=0,
+                            code=None if code is None else "other", param=None if param is None else "other")
+            if type(status) is int and status == 400:
+                expected.update(http_status=400, message_mentions=[])
+            self.assertEqual(caught.exception.diagnostics, expected)
+
+    async def test_failure_before_runner_has_zero_attempts_and_no_model_request(self):
+        model = ScriptedModel([])
         with self.assertRaises(ExtractionError) as caught:
-            await extract_bill(model, [TEXT])
+            await extract_bill(model, [TEXT], timeout="private-marker")
+        self.assertEqual(model.requests, [])
         self.assertEqual(caught.exception.category, "provider")
-        self.assertEqual(len(model.requests), 1)
+        self.assertEqual(caught.exception.diagnostics, dict(kind="other", attempt=0, completed_responses=0))
+        self.assertIsNone(caught.exception.__context__)
 
     async def test_second_call_obeys_deadline_and_caller_cancellation(self):
         for cancel in (False, True):

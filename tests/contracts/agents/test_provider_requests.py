@@ -23,6 +23,34 @@ def response_body(output):
 
 
 class ResponsesContractTests(unittest.IsolatedAsyncioTestCase):
+    async def test_bill_http_failure_reports_only_allowlisted_metadata_without_retry(self):
+        from energy_ai.bills.extraction import extract_bill, ExtractionError
+        from tests.fixtures.bills import TEXT
+        for status, code, param in ((400, "invalid_json_schema", "text.format.schema"),
+                                    (400, "private-marker", "secret-marker"),
+                                    (429, "rate_limit_exceeded", None)):
+            requests = []
+            def respond(request):
+                requests.append(request)
+                return httpx.Response(status, headers={"x-request-id": "private-marker"}, json={"error": {
+                    "message": "invalid schema mentions anyOf and private-marker",
+                    "code": code, "param": param, "private-marker": "secret-marker"}})
+            with self.subTest(status=status, code=code):
+                async with open_model("openai", api_key="secret-marker", transport=httpx.MockTransport(respond)) as model:
+                    with self.assertRaises(ExtractionError) as caught:
+                        await extract_bill(model, [TEXT])
+                expected = dict(kind="http_status", attempt=1, completed_responses=0, http_status=status,
+                                code="other" if code == "private-marker" else code,
+                                param="other" if param == "secret-marker" else param)
+                if status == 400:
+                    expected["message_mentions"] = ["anyOf", "invalid", "schema"]
+                    if param == "text.format.schema":
+                        expected["message_mentions"] = ["anyOf", "format", "invalid", "schema", "text.format"]
+                self.assertEqual(caught.exception.diagnostics, expected)
+                self.assertEqual(len(requests), 1)
+                self.assertIsNone(caught.exception.__context__)
+                self.assertNotIn("marker", str(caught.exception) + json.dumps(caught.exception.diagnostics))
+
     async def test_bill_schema_is_sent_through_openai_and_signed_oci_responses(self):
         from energy_ai.bills.extraction import extract_bill
         from tests.fixtures.bills import proposal, TEXT
