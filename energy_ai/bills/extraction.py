@@ -5,7 +5,8 @@ from dataclasses import dataclass
 import json
 import re
 
-from agents import Agent, ModelSettings, RunConfig, Runner
+from agents import Agent, AgentOutputSchema, ModelSettings, RunConfig, RunHooks, Runner
+from agents.exceptions import AgentsException, ModelBehaviorError
 from pydantic import ValidationError
 
 from energy_ai.bills.proposal import BillProposal
@@ -55,6 +56,12 @@ class ExtractionError(ValueError):
     def __init__(self, category="verification", diagnostics=None):
         self.category, self.diagnostics = category, diagnostics
         super().__init__("AI could not produce verifiable bill facts. Retry or enter the facts manually.")
+
+
+class _BillOutputError(ModelBehaviorError):
+    def __init__(self, error):
+        self.category, self.diagnostics = error.category, error.diagnostics
+        super().__init__("Bill output validation failed.")
 
 
 @dataclass(frozen=True)
@@ -119,34 +126,58 @@ def _candidate(text, pages):
     return candidate
 
 
+class _BillOutputSchema(AgentOutputSchema):
+    def __init__(self, pages):
+        super().__init__(BillProposal)
+        self.pages = pages
+
+    def validate_json(self, text):
+        try:
+            return _candidate(text, self.pages)
+        except ExtractionError as error:
+            raise _BillOutputError(error) from None
+
+
+@dataclass
+class _BillUsage(RunHooks):
+    requests: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
+
+    async def on_llm_end(self, context, agent, response):
+        self.requests += response.usage.requests
+        self.input_tokens += response.usage.input_tokens
+        self.output_tokens += response.usage.output_tokens
+
+
 async def extract_bill(model, pages, *, timeout=100):
     if not pages or len(pages) > 20 or sum(map(len, pages)) > 60000:
         raise ExtractionError()
-    agent = Agent(name="Bill reader", instructions=INSTRUCTIONS + "\nSchema:\n" +
-                  json.dumps(BillProposal.model_json_schema()), model=model, tools=[],
+    agent = Agent(name="Bill reader", instructions=INSTRUCTIONS, model=model, tools=[],
+                  output_type=_BillOutputSchema(pages),
                   model_settings=ModelSettings(max_tokens=7000, timeout=60, store=False))
     payload = {"document_pages": [{"page": i + 1, "text": text} for i, text in enumerate(pages)]}
-    requests = input_tokens = output_tokens = 0
+    usage = _BillUsage()
     try:
         async with asyncio.timeout(min(timeout, 100)):
             for attempt in range(2):
-                result = await Runner.run(agent, json.dumps(payload), max_turns=1,
-                    run_config=RunConfig(tracing_disabled=True, trace_include_sensitive_data=False))
-                usage = result.context_wrapper.usage
-                requests += usage.requests
-                input_tokens += usage.input_tokens
-                output_tokens += usage.output_tokens
                 try:
-                    candidate = _candidate(result.final_output, pages)
-                except ExtractionError as error:
-                    if attempt or error.category not in {"json", "schema", "evidence_keys", "evidence_quote"}:
-                        raise
-                    payload["validation_feedback"] = dict(category=error.category, diagnostics=error.diagnostics)
+                    result = await Runner.run(agent, json.dumps(payload), max_turns=1, hooks=usage,
+                        run_config=RunConfig(tracing_disabled=True, trace_include_sensitive_data=False))
+                except _BillOutputError as error:
+                    error.run_data = None
+                    failure = ExtractionError(error.category, error.diagnostics)
                 else:
-                    return ExtractionResult(candidate, requests, input_tokens, output_tokens)
+                    return ExtractionResult(result.final_output, usage.requests, usage.input_tokens, usage.output_tokens)
+                if attempt or failure.category not in {"json", "schema", "evidence_keys", "evidence_quote"}:
+                    raise failure from None
+                payload["validation_feedback"] = dict(category=failure.category, diagnostics=failure.diagnostics)
     except ExtractionError:
         raise
     except TimeoutError:
-        raise ExtractionError("timeout") from None
-    except Exception:
-        raise ExtractionError("provider") from None
+        failure = ExtractionError("timeout")
+    except Exception as error:
+        if isinstance(error, AgentsException):
+            error.run_data = None
+        failure = ExtractionError("provider")
+    raise failure from None

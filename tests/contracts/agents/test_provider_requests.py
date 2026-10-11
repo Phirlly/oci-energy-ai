@@ -23,6 +23,40 @@ def response_body(output):
 
 
 class ResponsesContractTests(unittest.IsolatedAsyncioTestCase):
+    async def test_bill_schema_is_sent_through_openai_and_signed_oci_responses(self):
+        from energy_ai.bills.extraction import extract_bill
+        from tests.fixtures.bills import proposal, TEXT
+        key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        pem = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+                                serialization.NoEncryption()).decode()
+        signer = Signer("ocid1.tenancy.oc1..fixture", "ocid1.user.oc1..fixture", "aa:bb",
+                        None, private_key_content=pem)
+        for provider in ("openai", "oci"):
+            requests = []
+            def respond(request):
+                requests.append(request)
+                return httpx.Response(200, json=response_body([message(proposal())]))
+            options = dict(api_key="fixture") if provider == "openai" else dict(
+                oci_region="us-ashburn-1", oci_project=PROJECT_ID, oci_signer=signer)
+            with self.subTest(provider=provider):
+                async with open_model(provider, **options, transport=httpx.MockTransport(respond)) as model:
+                    result = await extract_bill(model, [TEXT + "\nprivate-source-marker"])
+                self.assertEqual((len(requests), result.requests), (1, 1))
+                self.assertEqual(result.candidate.evidence["supplier"].offset, 0)
+                body = json.loads(requests[0].content)
+                self.assertIn("text", body)
+                format = body["text"]["format"]
+                self.assertEqual(format["type"], "json_schema")
+                self.assertTrue(format["strict"])
+                self.assertEqual(set(format["schema"]["required"]), set(proposal()))
+                self.assertNotIn("offset", json.dumps(format["schema"]))
+                self.assertNotIn("marker", json.dumps(format["schema"]))
+                self.assertFalse(body["store"])
+                self.assertEqual(body.get("tools", []), [])
+                if provider == "oci":
+                    self.assertTrue(requests[0].headers["authorization"].startswith("Signature "))
+                    self.assertEqual(requests[0].headers["openai-project"], PROJECT_ID)
+
     async def test_openai_round_trip_has_correlated_output_and_bounded_private_requests(self):
         requests = []
 

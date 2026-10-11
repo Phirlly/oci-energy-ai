@@ -47,9 +47,12 @@ class Facts(StrictModel):
         return value
 
 
-class Evidence(StrictModel):
+class SourceQuote(StrictModel):
     page: int = Field(strict=True, ge=1, le=20)
     quote: str = Field(min_length=1, max_length=600)
+
+
+class Evidence(SourceQuote):
     offset: int | None = Field(default=None, ge=0)
 
 

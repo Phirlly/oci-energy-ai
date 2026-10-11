@@ -1,3 +1,4 @@
+from copy import deepcopy
 import json
 import unittest
 from unittest.mock import patch
@@ -5,6 +6,7 @@ from unittest.mock import patch
 import httpx2 as httpx
 from agents import ModelSettings
 from agents.models.interface import ModelTracing
+from anthropic import transform_schema
 
 from energy_ai.agents.analysis import AnalysisError, analyze_sample
 from energy_ai.agents.provider_clients import open_model
@@ -32,6 +34,65 @@ class AnthropicMessagesTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.requests, 1)
         self.assertNotIn("tool_choice", requests[0])
         self.assertNotIn("tools", requests[0])
+
+    async def test_native_bill_schema_keeps_local_bounds_correction_and_usage(self):
+        from energy_ai.bills.extraction import extract_bill
+        from tests.fixtures.bills import proposal, TEXT
+        for field, value, reason in (("days", 367, "range"), ("supplier", "private-marker" * 14, "length"),
+                                      ("consumption", "-1", "range"), ("currency", "usd", "value")):
+            requests, source_schemas, invalid = [], [], proposal()
+            invalid[field]["value"] = value
+            def observed_transform(schema):
+                source_schemas.append((schema, deepcopy(schema)))
+                return transform_schema(schema)
+            def respond(request):
+                requests.append(json.loads(request.content))
+                return httpx.Response(200, json=response_body([{"type": "text", "text": json.dumps(
+                    invalid if len(requests) == 1 else proposal())}]))
+            with self.subTest(field=field), patch("energy_ai.agents.anthropic_model.transform_schema",
+                                                side_effect=observed_transform):
+                async with open_model("anthropic", api_key="fixture", transport=httpx.MockTransport(respond)) as model:
+                    result = await extract_bill(model, [TEXT + "\nprivate-source-marker"])
+                self.assertEqual((result.requests, result.input_tokens, result.output_tokens), (2, 20, 40))
+                self.assertEqual(result.candidate.facts.consumption, 580)
+                first, second = requests
+                self.assertIn("format", first["output_config"])
+                self.assertEqual(first["output_config"], second["output_config"])
+                self.assertEqual(first["output_config"]["effort"], "low")
+                self.assertEqual(first["output_config"]["format"]["type"], "json_schema")
+                schema = first["output_config"]["format"]["schema"]
+                self.assertEqual(set(schema["required"]), set(proposal()))
+                quote = next(d for d in schema["$defs"].values() if "quote" in d.get("properties", {}))
+                self.assertEqual(set(quote["properties"]), {"page", "quote"})
+                self.assertNotIn("maximum", quote["properties"]["page"])
+                self.assertNotIn("marker", json.dumps(schema))
+                self.assertEqual(len(source_schemas), 2)
+                for actual, before in source_schemas:
+                    self.assertEqual(actual, before)
+                    self.assertIsNot(actual, schema)
+                self.assertNotIn("tools", first)
+                self.assertNotIn("tool_choice", first)
+                payload = json.loads(second["messages"][0]["content"][0]["text"])
+                self.assertEqual(payload["document_pages"], [{"page": 1, "text": TEXT + "\nprivate-source-marker"}])
+                self.assertEqual(payload["validation_feedback"], dict(category="schema", diagnostics=dict(
+                    issues=[dict(field=field + ".value", reason=reason)], truncated=False)))
+
+    async def test_structured_bill_refusal_or_truncation_is_safe_and_not_retried(self):
+        from energy_ai.bills.extraction import extract_bill, ExtractionError
+        from tests.fixtures.bills import TEXT
+        for reason in ("refusal", "max_tokens"):
+            requests = []
+            def respond(request):
+                requests.append(request)
+                return httpx.Response(200, json=response_body([{"type": "text", "text": "private-marker"}], reason))
+            with self.subTest(reason=reason):
+                async with open_model("anthropic", api_key="fixture", transport=httpx.MockTransport(respond)) as model:
+                    with self.assertRaises(ExtractionError) as caught:
+                        await extract_bill(model, [TEXT])
+                self.assertEqual(len(requests), 1)
+                self.assertEqual(caught.exception.category, "provider")
+                self.assertIsNone(caught.exception.__context__)
+                self.assertNotIn("marker", str(caught.exception))
 
     @patch.dict("os.environ", {"ANTHROPIC_AUTH_TOKEN": "unrelated-token",
                                "ANTHROPIC_BASE_URL": "https://untrusted.invalid"})

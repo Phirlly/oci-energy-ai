@@ -23,7 +23,7 @@ class SourcedProposalTests(unittest.TestCase):
 
     def test_each_nonnull_value_requires_its_evidence_and_all_fields_are_required(self):
         for change in ("missing_field", "missing_evidence", "null_evidence", "extra_evidence",
-                       "unknown_field", "missing_charge_evidence", "missing_value"):
+                       "unknown_field", "missing_charge_evidence", "missing_value", "model_offset"):
             data = proposal()
             if change == "missing_field":
                 del data["unit"]
@@ -37,10 +37,21 @@ class SourcedProposalTests(unittest.TestCase):
                 data["other"] = data["unit"]
             elif change == "missing_charge_evidence":
                 del data["charges"][0]["evidence"]
+            elif change == "model_offset":
+                data["unit"]["evidence"]["offset"] = 0
             else:
                 del data["unit"]["value"]
             with self.subTest(change=change), self.assertRaises(ValueError):
                 BillProposal.model_validate(data)
+
+    def test_model_evidence_schema_excludes_locally_computed_offset(self):
+        schema = BillProposal.model_json_schema()
+        quotes = [value for value in schema["$defs"].values()
+                  if "quote" in value.get("properties", {})]
+        self.assertEqual(len(quotes), 1)
+        self.assertEqual(set(quotes[0]["properties"]), {"page", "quote"})
+        self.assertEqual(set(quotes[0]["required"]), {"page", "quote"})
+        self.assertFalse(quotes[0]["additionalProperties"])
 
     def test_typed_pairs_retain_numeric_classification_and_calendar_constraints(self):
         variants = [("days", True), ("days", "29"), ("days", 367), ("days", 0),

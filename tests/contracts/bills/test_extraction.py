@@ -3,6 +3,8 @@ import json
 import unittest
 from unittest.mock import patch
 
+from agents import Runner
+from agents.exceptions import AgentsException
 from pydantic import ValidationError
 from pydantic_core import PydanticCustomError
 
@@ -18,7 +20,8 @@ class BillAgentContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.candidate.facts.current_total, 91.50)
         self.assertEqual(result.requests, 1)
         self.assertEqual(result.candidate.evidence["consumption"].offset, 0)
-        instructions, schema_text = model.requests[0]["system_instructions"].split("\nSchema:\n", 1)
+        instructions = model.requests[0]["system_instructions"]
+        self.assertNotIn("\nSchema:\n", instructions)
         direct_rules = " ".join(instructions.split())
         for rule in ("supplier.value", "complete issuing utility or organization name as printed",
                      "Exclude surrounding statement headings, labels and notices",
@@ -27,7 +30,10 @@ class BillAgentContractTests(unittest.IsolatedAsyncioTestCase):
                      "sample, fictional or illustrative", "null only when a fact is absent or unclear",
                      "Do not require external confirmation"):
             self.assertIn(rule, direct_rules)
-        schema = json.loads(schema_text)
+        output_schema = model.requests[0]["output_schema"]
+        self.assertFalse(output_schema.is_plain_text())
+        self.assertTrue(output_schema.is_strict_json_schema())
+        schema = output_schema.json_schema()
         supplier = schema["properties"]["supplier"]
         self.assertIn("supplier", schema["required"])
         self.assertIn({"type": "null"}, supplier["anyOf"])
@@ -254,6 +260,40 @@ class BillSchemaFeedbackTests(unittest.IsolatedAsyncioTestCase):
 
 
 class BillCorrectionBoundsTests(unittest.IsolatedAsyncioTestCase):
+    async def test_empty_or_missing_final_text_fails_safely_after_one_call(self):
+        blank = message()
+        blank.content[0].text = ""
+        for output in ([blank], []):
+            model = ScriptedModel([output])
+            with self.subTest(missing=not output), self.assertRaises(ExtractionError) as caught:
+                await extract_bill(model, [TEXT])
+            self.assertEqual(len(model.requests), 1)
+            self.assertEqual(caught.exception.category, "provider")
+            self.assertIsNone(caught.exception.__context__)
+            self.assertIsNone(caught.exception.__cause__)
+
+    async def test_sdk_response_details_do_not_escape_validation_failure(self):
+        data = proposal()
+        data["supplier"]["value"] = {"private-marker": "secret-marker"}
+        original, sdk_errors = Runner.run, []
+        async def observed(*args, **kwargs):
+            try:
+                return await original(*args, **kwargs)
+            except AgentsException as error:
+                self.assertIsNotNone(error.run_data)
+                sdk_errors.append(error)
+                raise
+        model = ScriptedModel([[message(data)], [message(data)]])
+        with patch("energy_ai.bills.extraction.Runner.run", side_effect=observed):
+            with self.assertRaises(ExtractionError) as caught:
+                await extract_bill(model, [TEXT])
+        self.assertEqual(len(sdk_errors), 2)
+        self.assertTrue(all(error.run_data is None for error in sdk_errors))
+        self.assertIsNone(caught.exception.__context__)
+        self.assertIsNone(caught.exception.__cause__)
+        self.assertEqual(set(vars(caught.exception)), {"category", "diagnostics"})
+        self.assertNotIn("marker", str(caught.exception) + json.dumps(caught.exception.diagnostics))
+
     async def test_provider_error_does_not_start_a_correction(self):
         model = ScriptedModel([RuntimeError("private-marker")])
         with self.assertRaises(ExtractionError) as caught:

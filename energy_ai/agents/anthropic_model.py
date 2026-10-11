@@ -3,6 +3,7 @@
 import json
 
 from agents import FunctionTool, Model, ModelResponse, Usage
+from anthropic import transform_schema
 from openai.types.responses import ResponseFunctionToolCall, ResponseOutputMessage, ResponseOutputText
 
 
@@ -72,8 +73,8 @@ class AnthropicMessagesModel(Model):
     async def get_response(self, system_instructions, input, model_settings, tools,
                            output_schema, handoffs, tracing, *, previous_response_id,
                            conversation_id, prompt):
-        if output_schema or handoffs or previous_response_id or conversation_id or prompt:
-            raise ValueError("Structured output, handoffs and remote state are unsupported.")
+        if handoffs or previous_response_id or conversation_id or prompt:
+            raise ValueError("Handoffs and remote state are unsupported.")
         allowed = {"max_tokens", "timeout", "store", "tool_choice", "parallel_tool_calls"}
         if any(value is not None for name, value in model_settings.to_json_dict().items() if name not in allowed):
             raise ValueError("Unsupported Anthropic model setting.")
@@ -90,11 +91,14 @@ class AnthropicMessagesModel(Model):
         choice = {"type": {"required": "any", "none": "none"}.get(model_settings.tool_choice, "auto")}
         if choice["type"] != "none":
             choice["disable_parallel_tool_use"] = True
+        output_config = {"effort": "low"}
+        if output_schema is not None and not output_schema.is_plain_text():
+            output_config["format"] = {"type": "json_schema", "schema": transform_schema(output_schema.json_schema())}
         response = await self.client.messages.create(
             model=self.model, messages=to_messages(input), system=system_instructions or "",
             **({"tools": definitions, "tool_choice": choice} if definitions else {}),
             max_tokens=model_settings.max_tokens or 2048,
-            thinking={"type": "disabled"}, output_config={"effort": "low"},
+            thinking={"type": "disabled"}, output_config=output_config,
             timeout=model_settings.timeout or 60,
         )
         if response.stop_reason not in {"end_turn", "tool_use"}:

@@ -5,7 +5,7 @@ from typing import Generic, Literal, TypeVar
 from pydantic import Field
 
 from energy_ai.bills.schema import (
-    Candidate, Charge, Currency, Days, Energy, Evidence, Facts, Money, StrictModel, Text,
+    Candidate, Charge, Currency, Days, Energy, Evidence, Facts, Money, SourceQuote, StrictModel, Text,
 )
 
 T = TypeVar("T")
@@ -13,7 +13,7 @@ T = TypeVar("T")
 
 class Sourced(StrictModel, Generic[T]):
     value: T
-    evidence: Evidence
+    evidence: SourceQuote
 
 
 class BillProposal(StrictModel):
@@ -42,7 +42,9 @@ class BillProposal(StrictModel):
                 continue
             sourced = getattr(self, name)
             if sourced is not None:
-                values[name], evidence[name] = sourced.value, sourced.evidence
+                values[name] = sourced.value
+                evidence[name] = Evidence(**sourced.evidence.model_dump())
         values["charges"] = [row.value for row in self.charges]
-        evidence.update({f"charges.{index}": row.evidence for index, row in enumerate(self.charges)})
+        evidence.update({f"charges.{index}": Evidence(**row.evidence.model_dump())
+                         for index, row in enumerate(self.charges)})
         return Candidate(facts=Facts.model_validate(values), evidence=evidence)
