@@ -94,7 +94,8 @@ class PublicBillVerificationTests(unittest.TestCase):
         report = json.loads(output.getvalue())["providers"][0]
         self.assertEqual(code, 1)
         self.assertEqual(report["stage"], "extraction_schema")
-        self.assertIsNone(report["diagnostics"])
+        self.assertEqual(report["diagnostics"], dict(
+            issues=[dict(field="account.evidence.other", reason="extra")], truncated=False))
         self.assertNotIn("marker", output.getvalue())
 
     @patch("deployment.verify_bills.open_model")

@@ -6,6 +6,7 @@ import json
 import re
 
 from agents import Agent, ModelSettings, RunConfig, Runner
+from pydantic import ValidationError
 
 from energy_ai.bills.proposal import BillProposal
 from energy_ai.bills.schema import Candidate, EvidenceError
@@ -64,6 +65,31 @@ class ExtractionResult:
     output_tokens: int
 
 
+def _schema_diagnostics(error):
+    """Project validation errors onto bounded code-owned labels, never raw details."""
+    components = {"value", "evidence", "page", "quote", "offset", "label", "amount", "role"}
+    reasons = {kind: reason for reason, kinds in {
+        "missing": ("missing",), "extra": ("extra_forbidden",),
+        "type": ("model_type", "model_attributes_type", "string_type", "int_type", "list_type", "dict_type"),
+        "length": ("string_too_short", "string_too_long", "too_short", "too_long"),
+        "value": ("literal_error", "string_pattern_mismatch", "value_error"),
+        "number": ("decimal_type", "decimal_parsing", "decimal_max_digits", "decimal_max_places",
+                   "decimal_whole_digits", "finite_number", "int_parsing", "int_from_float"),
+        "date": ("date_type", "date_parsing", "date_from_datetime_parsing", "date_from_datetime_inexact"),
+        "range": ("greater_than", "greater_than_equal", "less_than", "less_than_equal"),
+    }.items() for kind in kinds}
+    issues = set()
+    for detail in error.errors(include_url=False, include_context=False, include_input=False):
+        location = detail["loc"]
+        field = location[0] if location and location[0] in BillProposal.model_fields else "document"
+        path = [field]
+        for component in location[1:5]:
+            path.append("item" if isinstance(component, int) else component if component in components else "other")
+        issues.add((".".join(path), reasons.get(detail["type"], "invalid")))
+    return dict(issues=[dict(field=field, reason=reason) for field, reason in sorted(issues)[:12]],
+                truncated=len(issues) > 12)
+
+
 def _candidate(text, pages):
     if not isinstance(text, str) or len(text) > 60000:
         raise ExtractionError("output")
@@ -74,6 +100,8 @@ def _candidate(text, pages):
         raise ExtractionError("json", dict(opening_fence=text.lstrip().startswith("```"))) from None
     try:
         candidate = BillProposal.model_validate(value).to_candidate()
+    except ValidationError as error:
+        raise ExtractionError("schema", _schema_diagnostics(error)) from None
     except ValueError:
         raise ExtractionError("schema") from None
     try:

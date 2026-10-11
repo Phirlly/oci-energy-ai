@@ -1,6 +1,10 @@
 import asyncio
 import json
 import unittest
+from unittest.mock import patch
+
+from pydantic import ValidationError
+from pydantic_core import PydanticCustomError
 
 from energy_ai.bills.extraction import extract_bill, ExtractionError
 from tests.fixtures.agent_responses import ScriptedModel, message
@@ -62,14 +66,15 @@ class BillAgentContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(model.requests[0]["tools"], [])
         self.assertFalse(model.requests[0]["model_settings"].store)
 
-    async def test_failure_diagnostics_report_only_fixed_stage(self):
+    async def test_document_schema_failures_report_only_fixed_labels(self):
         invalid = proposal()
         invalid["private-marker"] = "secret-marker"
-        cases = [("not an object", "schema"), (invalid, "schema")]
-        for value, stage in cases:
-            with self.subTest(stage=stage), self.assertRaises(ExtractionError) as caught:
+        for value, reason in (("not an object", "type"), (invalid, "extra")):
+            with self.subTest(reason=reason), self.assertRaises(ExtractionError) as caught:
                 await extract_bill(ScriptedModel([[message(value)], [message(value)]]), [TEXT])
-            self.assertEqual(caught.exception.category, stage)
+            self.assertEqual(caught.exception.category, "schema")
+            self.assertEqual(caught.exception.diagnostics,
+                             dict(issues=[dict(field="document", reason=reason)], truncated=False))
             self.assertNotIn("private-marker", str(caught.exception))
 
     async def test_evidence_diagnostics_contain_only_known_fields_and_counts(self):
@@ -78,8 +83,10 @@ class BillAgentContractTests(unittest.IsolatedAsyncioTestCase):
             expected, category = None, "schema"
             if change == "missing":
                 del data["consumption"]["evidence"]
+                expected = dict(issues=[dict(field="consumption.evidence", reason="missing")], truncated=False)
             elif change == "extra":
                 data["consumption"]["evidence"]["private-marker"] = "secret-marker"
+                expected = dict(issues=[dict(field="consumption.evidence.other", reason="extra")], truncated=False)
             else:
                 data["consumption"]["evidence"] = dict(page=2 if change == "page" else 1,
                                                        quote="secret-marker")
@@ -131,11 +138,66 @@ class BillAgentContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((result.requests, result.input_tokens, result.output_tokens), (2, 20, 40))
         feedback = json.loads(model.requests[1]["input"][0]["content"])
         self.assertEqual(feedback["document_pages"], [{"page": 1, "text": TEXT}])
-        self.assertEqual(feedback["validation_feedback"], dict(category="schema", diagnostics=None))
+        self.assertEqual(feedback["validation_feedback"], dict(category="schema", diagnostics=dict(
+            issues=[dict(field="unit.evidence", reason="missing"),
+                    dict(field="usage_kind.evidence", reason="missing")], truncated=False)))
         for request in model.requests:
             self.assertEqual(request["tools"], [])
             self.assertFalse(request["model_settings"].store)
             self.assertTrue(request["tracing"].is_disabled())
+
+
+class BillSchemaFeedbackTests(unittest.IsolatedAsyncioTestCase):
+    async def test_proposal_and_domain_validation_report_known_fields_and_reasons(self):
+        cases = [("days", False, "days.value", "type"),
+                 ("days", 367, "days.value", "range"),
+                 ("supplier", "x" * 161, "supplier.value", "length"),
+                 ("service", "private-marker", "service.value", "value"),
+                 ("consumption", "private-marker", "consumption.value", "number"),
+                 ("period_start", "2024-02-30", "period_start", "date")]
+        for field, value, location, reason in cases:
+            data = proposal()
+            data[field]["value"] = value
+            model = ScriptedModel([[message(data)], [message(data)]])
+            with self.subTest(field=field, reason=reason), self.assertRaises(ExtractionError) as caught:
+                await extract_bill(model, [TEXT])
+            self.assertEqual(caught.exception.category, "schema")
+            self.assertEqual(caught.exception.diagnostics,
+                             dict(issues=[dict(field=location, reason=reason)], truncated=False))
+            self.assertEqual(len(model.requests), 2)
+
+    async def test_issue_cap_applies_after_index_masking_and_deduplication(self):
+        for many_fields in (False, True):
+            data = {key: [] if key == "charges" else {} for key in proposal()} if many_fields else proposal()
+            data["charges"] = [{}] * 40
+            with self.subTest(many_fields=many_fields), self.assertRaises(ExtractionError) as caught:
+                await extract_bill(ScriptedModel([[message(data)], [message(data)]]), [TEXT])
+            report = caught.exception.diagnostics
+            self.assertEqual(report["truncated"], many_fields)
+            self.assertEqual(len(report["issues"]), 12 if many_fields else 2)
+            if not many_fields:
+                self.assertEqual(report["issues"], [dict(field="charges.item.evidence", reason="missing"),
+                                                    dict(field="charges.item.value", reason="missing")])
+            self.assertEqual(len({tuple(item.items()) for item in report["issues"]}), len(report["issues"]))
+
+    async def test_custom_error_content_and_unknown_locations_never_enter_feedback(self):
+        error = ValidationError.from_exception_data("private-title", [dict(
+            type=PydanticCustomError("private-code", "private-message {value}", {"value": "private-context"}),
+            loc=("supplier", "evidence", "private-key", "quote", 999, "private-more"), input="private-input")])
+        model = ScriptedModel([[message(proposal())], [message(proposal())]])
+        with patch("energy_ai.bills.extraction.BillProposal.model_validate", side_effect=error):
+            with self.assertRaises(ExtractionError) as caught:
+                await extract_bill(model, [TEXT])
+        expected = dict(issues=[dict(field="supplier.evidence.other.quote.item", reason="invalid")], truncated=False)
+        self.assertEqual(caught.exception.diagnostics, expected)
+        feedback = json.loads(model.requests[1]["input"][0]["content"])
+        self.assertEqual(feedback["validation_feedback"], dict(category="schema", diagnostics=expected))
+        self.assertNotIn("private-", json.dumps(feedback) + str(caught.exception))
+        with patch("energy_ai.bills.extraction.BillProposal.model_validate", side_effect=ValueError("private-error")):
+            with self.assertRaises(ExtractionError) as fallback:
+                await extract_bill(ScriptedModel([[message(proposal())], [message(proposal())]]), [TEXT])
+        self.assertEqual(fallback.exception.category, "schema")
+        self.assertIsNone(fallback.exception.diagnostics)
 
 
 class BillCorrectionBoundsTests(unittest.IsolatedAsyncioTestCase):
