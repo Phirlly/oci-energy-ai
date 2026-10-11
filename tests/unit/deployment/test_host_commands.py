@@ -131,3 +131,74 @@ class HostCommandTests(unittest.TestCase):
         summaries.append(summaries[0])
         with self.assertRaisesRegex(DeploymentError, 'duplicate'):
             self.commands.activate(DIGEST, 'same')
+
+    def test_throttled_post_create_read_retries_same_id_without_second_create(self):
+        calls = []
+        def read(identifier):
+            calls.append(identifier)
+            if len(calls) < 3:
+                raise ServiceError(429, 'TooManyRequests', {}, 'private-service-detail')
+            return response(self.command)
+        self.client.get_instance_agent_command.side_effect = read
+        self.assertEqual(self.commands.activate(DIGEST, 'same'), self.state)
+        self.assertEqual(calls, [COMMAND] * 3)
+        self.assertGreaterEqual(self.clock.now, 6)
+        self.assertLessEqual(self.clock.now, 12)
+        self.client.create_instance_agent_command.assert_called_once()
+
+    def test_throttled_discovery_recovers_but_still_rejects_changed_identity(self):
+        self.commands.activate(DIGEST, 'old')
+        self.existing()
+        for changed in (False, True):
+            with self.subTest(changed=changed):
+                if changed:
+                    self.command.target.instance_id = 'ocid1.instance.oc1.iad.' + 'f' * 32
+                self.client.get_instance_agent_command.side_effect = [
+                    ServiceError(429, 'TooManyRequests', {}, 'private-service-detail'), response(self.command)]
+                if changed:
+                    with self.assertRaisesRegex(DeploymentError, 'identity'):
+                        self.commands.settle()
+                else:
+                    self.commands.settle()
+        self.client.create_instance_agent_command.assert_called_once()
+
+    def test_metadata_read_exhaustion_and_other_errors_do_not_submit_commands(self):
+        self.commands.activate(DIGEST, 'old')
+        self.existing()
+        self.commands.deadline.end = 1000
+        errors = [ServiceError(status, 'Fixture', {}, 'private-service-detail')
+                  for status in (429, 401, 403, 404, 500)] + [ConnectionError('private-service-detail')]
+        for error in errors:
+            with self.subTest(error=type(error).__name__, status=getattr(error, 'status', None)):
+                self.client.get_instance_agent_command.reset_mock()
+                self.client.get_instance_agent_command.side_effect = error
+                with self.assertRaises(DeploymentError) as raised:
+                    self.commands.activate('b' * 64, 'new')
+                self.assertNotIn('private-service-detail', str(raised.exception))
+                throttled = getattr(error, 'status', None) == 429
+                self.assertEqual(self.client.get_instance_agent_command.call_count, 6 if throttled else 1)
+                if throttled:
+                    self.assertIn('throttled', str(raised.exception))
+                    self.assertGreaterEqual(self.clock.now, 44)
+                    self.assertLessEqual(self.clock.now, 88)
+                self.client.create_instance_agent_command.assert_called_once()
+
+    def test_metadata_read_deadline_blocks_backoff_replay_and_late_success(self):
+        self.commands.activate(DIGEST, 'old')
+        self.existing()
+        for late_success in (False, True):
+            with self.subTest(late_success=late_success):
+                self.clock.now = 0
+                self.commands.deadline.end = 1
+                def read(identifier):
+                    if late_success:
+                        self.clock.now = 2
+                        return response(self.command)
+                    raise ServiceError(429, 'TooManyRequests', {}, 'private-service-detail')
+                self.client.get_instance_agent_command.reset_mock()
+                self.client.get_instance_agent_command.side_effect = read
+                with self.assertRaisesRegex(DeploymentError, 'deadline'):
+                    self.commands.activate('b' * 64, 'new')
+                self.client.get_instance_agent_command.assert_called_once_with(COMMAND)
+                self.assertEqual(self.clock.now, 2 if late_success else 1)
+                self.client.create_instance_agent_command.assert_called_once()

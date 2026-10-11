@@ -60,9 +60,10 @@ class DeliverySdkContracts(unittest.TestCase):
     def test_agent_create_and_execution_use_actual_target_and_nested_exit_content(self):
         commands = HostCommands(self.clients.agent, CONFIG, REPOSITORY, INSTANCE, HOST_DIGEST, self.deadline)
         current = None
+        metadata_reads = 0
         state = dict(version=1, status='ready', host_digest=HOST_DIGEST, current=None, previous=None, candidate=None, release=None)
         def respond(**request):
-            nonlocal current
+            nonlocal current, metadata_reads
             operation = request['operation_name']
             if operation == 'list_instance_agent_commands':
                 return response([])
@@ -73,6 +74,9 @@ class DeliverySdkContracts(unittest.TestCase):
                     execution_time_out_in_seconds=details.execution_time_out_in_seconds)
                 return response(current)
             if operation == 'get_instance_agent_command':
+                metadata_reads += 1
+                if metadata_reads == 1:
+                    raise ServiceError(429, 'TooManyRequests', {}, 'private-service-detail')
                 return response(current)
             return response(agent.InstanceAgentCommandExecution(instance_agent_command_id=COMMAND,
                 instance_id=INSTANCE, lifecycle_state='SUCCEEDED', content=
@@ -80,6 +84,12 @@ class DeliverySdkContracts(unittest.TestCase):
         with patch.object(self.clients.agent.base_client, 'call_api', side_effect=respond) as transport:
             self.assertEqual(commands.status('fresh-observation'), state)
         requests = {call.kwargs['operation_name']: call.kwargs for call in transport.call_args_list}
+        operations = [call.kwargs['operation_name'] for call in transport.call_args_list]
+        self.assertEqual(operations.count('create_instance_agent_command'), 1)
+        self.assertEqual(operations.count('get_instance_agent_command'), 2)
+        for call in transport.call_args_list:
+            if call.kwargs['operation_name'] == 'get_instance_agent_command':
+                self.assertEqual(call.kwargs['path_params'], {'instanceAgentCommandId': COMMAND})
         self.assertEqual(requests['create_instance_agent_command']['body'].target.instance_id, INSTANCE)
         self.assertEqual(requests['get_instance_agent_command_execution']['path_params'],
                          {'instanceAgentCommandId': COMMAND})

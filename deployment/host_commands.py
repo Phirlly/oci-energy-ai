@@ -1,6 +1,7 @@
 """Bounded fixed Run Commands with recoverable intent and verified completion."""
 
 import re
+from random import uniform
 
 from oci.compute_instance_agent import models
 from oci.exceptions import ServiceError
@@ -62,11 +63,33 @@ class HostCommands:
                 raise DeploymentError('Unknown deployment command marker; inspect before retrying.')
             if name in result:
                 raise DeploymentError('Found duplicate deployment command markers.')
-            command = self.deadline.call(self.client.get_instance_agent_command, summary.instance_agent_command_id).data
+            command = self._get_command(summary.instance_agent_command_id)
             if command.id != summary.instance_agent_command_id:
                 raise DeploymentError('Host command identity changed.')
             result[name] = self._verify(command, name)
         return result
+
+    def _get_command(self, identifier):
+        # Retry only throttled metadata reads; command creation keeps its intent protocol.
+        throttled = object()
+        def request():
+            try:
+                return self.client.get_instance_agent_command(identifier)
+            except ServiceError as error:
+                if error.status == 429:
+                    return throttled
+                raise
+        delays = (4, 8, 16, 30, 30)
+        for attempt in range(len(delays) + 1):
+            result = self.deadline.call(request)
+            self.deadline.check()
+            if result is not throttled:
+                return result.data
+            if attempt == len(delays):
+                raise DeploymentError('OCI host-command metadata reads remain throttled; retry later.')
+            delay = uniform(delays[attempt] / 2, delays[attempt])
+            remaining = max(0, self.deadline.end - self.deadline.monotonic())
+            self.deadline.sleep(min(delay, remaining))
 
     def _wait(self, command, *, success):
         def request():
@@ -162,7 +185,7 @@ class HostCommands:
                     if command is None:
                         self.deadline.pause()
             else:
-                command = self.deadline.call(self.client.get_instance_agent_command, result.data.id).data
+                command = self._get_command(result.data.id)
                 if command.id != result.data.id:
                     raise DeploymentError('Host command identity changed.')
                 self._verify(command, name)
