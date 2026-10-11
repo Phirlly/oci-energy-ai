@@ -17,6 +17,11 @@ Include every schema field. Missing scalar facts are null; missing charges are [
 Every present scalar is {"value": the typed fact, "evidence": {"page": 1, "quote": "exact source text"}}.
 Each charges entry has the same value/evidence pair; its value has label, amount and role.
 Do not use separate facts or evidence maps. Do not guess missing facts.
+supplier.value contains only the complete issuing utility or organization name
+as printed. Exclude surrounding statement headings, labels and notices; preserve
+punctuation and legal suffixes belonging to the name. supplier.evidence.quote may
+include that surrounding header text. For example, the header "STATEMENT | Harbor
+Electric Cooperative, Inc." has supplier.value "Harbor Electric Cooperative, Inc.".
 Distinguish electricity from water/gas using the billed service, not footer text.
 Use ISO dates and uppercase ISO currency. Preserve full account and meter IDs.
 consumption is actual imported consumption as printed, NOT net/export or graph estimates.

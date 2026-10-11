@@ -14,7 +14,14 @@ class BillAgentContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.candidate.facts.current_total, 91.50)
         self.assertEqual(result.requests, 1)
         self.assertEqual(result.candidate.evidence["consumption"].offset, 0)
-        schema = json.loads(model.requests[0]["system_instructions"].split("\nSchema:\n", 1)[1])
+        instructions, schema_text = model.requests[0]["system_instructions"].split("\nSchema:\n", 1)
+        direct_rules = " ".join(instructions.split())
+        for rule in ("supplier.value", "complete issuing utility or organization name as printed",
+                     "Exclude surrounding statement headings, labels and notices",
+                     "preserve punctuation and legal suffixes", "supplier.evidence.quote",
+                     "may include that surrounding header text"):
+            self.assertIn(rule, direct_rules)
+        schema = json.loads(schema_text)
         supplier = schema["properties"]["supplier"]
         self.assertIn("supplier", schema["required"])
         self.assertIn({"type": "null"}, supplier["anyOf"])
@@ -22,6 +29,22 @@ class BillAgentContractTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn(rule, supplier.get("description", ""))
         self.assertEqual(result.candidate.facts.supplier, "Juniper Power")
         self.assertEqual(result.candidate.evidence["supplier"].quote, TEXT)
+
+    async def test_supplier_names_and_source_quotes_are_preserved_without_postprocessing(self):
+        for name in ("Statement Electric Co., Ltd.", "North & West Power Cooperative", None):
+            text = TEXT.replace("Juniper Power / ", "" if name is None else f"STATEMENT | {name} / ")
+            data = proposal(text)
+            data["supplier"] = None if name is None else dict(value=name, evidence=dict(page=1, quote=text))
+            model = ScriptedModel([[message(data)]])
+            with self.subTest(supplier=name):
+                result = await extract_bill(model, [text])
+                self.assertEqual(result.candidate.facts.supplier, name)
+                self.assertEqual(result.requests, 1)
+                if name is None:
+                    self.assertNotIn("supplier", result.candidate.evidence)
+                else:
+                    self.assertEqual(result.candidate.evidence["supplier"].quote, text)
+                    self.assertEqual(result.candidate.evidence["supplier"].offset, 0)
 
     async def test_malformed_or_invented_evidence_is_safe_failure(self):
         invented = proposal()
