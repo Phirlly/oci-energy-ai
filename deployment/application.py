@@ -34,6 +34,17 @@ def checked_image(directory, release):
         raise DeploymentError('Expected only the checked image.tar and image-id.txt for this commit.') from None
 
 
+def browser_target(result):
+    """Only validated, single-line public values may cross the workflow boundary."""
+    origin, release = result.get('origin'), result.get('release')
+    if (result.get('operation') != 'verify' or not isinstance(origin, str)
+            or not re.fullmatch(r'https://[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+', origin)
+            or len(origin) > 261 or not isinstance(release, str)
+            or not re.fullmatch(r'[a-f0-9]{40}', release)):
+        raise DeploymentError('Verified browser target was invalid.')
+    return f'origin={origin}\nrelease={release}\n'
+
+
 def main(arguments=None, *, environment=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('operation', choices=('apply', 'rollback', 'verify', 'destroy'))
@@ -67,6 +78,10 @@ def main(arguments=None, *, environment=None):
         if environment.get('GITHUB_STEP_SUMMARY'):
             with open(environment['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as summary:
                 summary.write('\n## OCI demo operation\n\n```json\n' + json.dumps(result, indent=2, sort_keys=True) + '\n```\n')
+        if args.operation == 'verify' and environment.get('GITHUB_OUTPUT'):
+            target = browser_target(result)
+            with open(environment['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+                output.write(target)
         return 0
     except DeploymentError as error:
         print(f'error: {error}', file=sys.stderr)

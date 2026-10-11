@@ -64,6 +64,7 @@ jobs:
           test -n "$RUNTIME_ARTIFACT_ID"
           gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "$RUNTIME_ARTIFACT" --dir dist/runtime
       - name: Run verified OCI demo operation
+        id: operation
         env:
           DEPLOYMENT_ID: ${{ vars.DEPLOYMENT_ID }}
           OCI_REGION: ${{ vars.OCI_REGION }}
@@ -84,3 +85,23 @@ jobs:
           DEMO_OPERATION: ${{ inputs.operation }}
           DESTROY_CONFIRMATION: ${{ inputs.confirmation }}
         run: uv run --no-sync python -m deployment.application "$DEMO_OPERATION" --confirm "$DESTROY_CONFIRMATION"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: inputs.operation == 'verify'
+        with:
+          node-version: '26.10.0'
+          package-manager-cache: false
+      - name: Install checked browser tools
+        if: inputs.operation == 'verify'
+        working-directory: frontend
+        run: |
+          npm ci --ignore-scripts --registry=https://registry.npmjs.org
+          npx --no-install playwright install --with-deps chromium
+      - name: Verify the authenticated browser journey
+        if: inputs.operation == 'verify'
+        timeout-minutes: 6
+        working-directory: frontend
+        env:
+          ENERGY_DEMO_ORIGIN: ${{ steps.operation.outputs.origin }}
+          ENERGY_DEMO_RELEASE: ${{ steps.operation.outputs.release }}
+          DEMO_PASSWORD: ${{ secrets.DEMO_PASSWORD }}
+        run: node check-hosted.mjs

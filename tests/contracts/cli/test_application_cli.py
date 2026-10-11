@@ -75,3 +75,39 @@ class ApplicationCommandTests(unittest.TestCase):
         self.assertEqual(status, 1)
         self.assertNotIn('private-marker', output + error)
         self.assertNotIn('Traceback', error)
+
+    @patch('deployment.application.Delivery')
+    @patch('deployment.application.DeliveryClients')
+    def test_verified_browser_target_is_written_without_credentials_or_progress(self, clients, delivery):
+        result = dict(operation='verify', origin='https://demo.example.com', release='b'*40)
+        delivery.return_value.verify.return_value = result
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary)/'outputs'
+            environment = ENVIRONMENT | {'GITHUB_OUTPUT': str(target)}
+            status, _, error = self.invoke(['verify'], environment)
+            self.assertEqual(status, 0, error)
+            self.assertEqual(target.read_text(), 'origin=https://demo.example.com\nrelease='+'b'*40+'\n')
+            target.unlink()
+            delivery.return_value.destroy.return_value = dict(operation='destroy')
+            self.assertEqual(self.invoke(['destroy', '--confirm', 'fixture-demo'], environment)[0], 0)
+            self.assertFalse(target.exists())
+
+    @patch('deployment.application.Delivery')
+    @patch('deployment.application.DeliveryClients')
+    def test_failed_or_malformed_verification_never_publishes_a_browser_target(self, clients, delivery):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary)/'outputs'
+            environment = ENVIRONMENT | {'GITHUB_OUTPUT': str(target)}
+            valid = dict(operation='verify', origin='https://demo.example.com', release='b'*40)
+            for change in ({'origin': 'http://demo.example.com'}, {'origin': 'https://demo.example.com\nx=value'},
+                           {'origin': 'https://demo.example.com/path'}, {'origin': 'https://user@demo.example.com'},
+                           {'release': 'b'*40+'\nx=value'}, {'release': 'main'}, {'operation': 'apply'}):
+                with self.subTest(change=change):
+                    delivery.return_value.verify.return_value = valid | change
+                    self.assertEqual(self.invoke(['verify'], environment)[0], 1)
+                    self.assertFalse(target.exists())
+            delivery.return_value.verify.side_effect = RuntimeError('private-marker')
+            status, output, error = self.invoke(['verify'], environment)
+            self.assertEqual(status, 1)
+            self.assertFalse(target.exists())
+            self.assertNotIn('private-marker', output + error)
