@@ -21,18 +21,22 @@ from energy_ai.web.requests import Login, read_contract
 from energy_ai.web.sessions import Sessions, TTL
 from energy_ai.web.origin import OriginPolicy
 from energy_ai.web.passwords import PASSWORD_GUIDANCE, valid_password
+from energy_ai.web.setup import setup_routes
 
 
 def create_app(*, access_code, origin, providers=(), extractor=None, model_ids=None, clock=time.monotonic,
-               office_analyzer=None, office_database=':memory:', backend_host=None, release=None):
+               office_analyzer=None, office_database=':memory:', backend_host=None, release=None, setup=None):
     policy = OriginPolicy.validate(origin, backend_host)
     if ((policy.secure and (not isinstance(release, str) or not re.fullmatch(r'[a-f0-9]{40}', release)))
             or (not policy.secure and release is not None)):
         raise ValueError('Hosted serving requires an immutable release identifier.')
-    if not valid_password(access_code):
+    if setup is None and not valid_password(access_code):
         raise ValueError(PASSWORD_GUIDANCE)
     store = Sessions(clock)
-    models = {p: (model_ids or {}).get(p) or DEFAULT_MODELS[p] for p in providers}
+    if setup is not None:
+        providers, models = setup.providers, setup.models
+    else:
+        models = {p: (model_ids or {}).get(p) or DEFAULT_MODELS[p] for p in providers}
 
     @asynccontextmanager
     async def lifespan(app):
@@ -82,7 +86,8 @@ def create_app(*, access_code, origin, providers=(), extractor=None, model_ids=N
         async def health():
             # Lifespan opens/validates the database before the server accepts requests.
             app.state.office
-            return dict(status='ready', release=release, schema=SCHEMA_VERSION)
+            return dict(status='setup_required' if setup is not None and setup.required else 'ready',
+                        release=release, schema=SCHEMA_VERSION)
 
     @app.exception_handler(ReviewError)
     async def review_error(request, error):
@@ -92,7 +97,10 @@ def create_app(*, access_code, origin, providers=(), extractor=None, model_ids=N
     async def login(request: Request):
         store.login_attempt()
         body = await read_contract(request, Login)
-        if not valid_password(body.code) or not hmac.compare_digest(body.code.encode(), access_code.encode()):
+        password = setup.password if setup is not None else access_code
+        if setup is not None and setup.required:
+            raise HTTPException(503, 'Complete the initial setup before signing in.')
+        if not valid_password(body.code) or not hmac.compare_digest(body.code.encode(), password.encode()):
             raise HTTPException(401, "Incorrect launch code.")
         old = request.cookies.get("energy_session")
         if old:
@@ -116,6 +124,7 @@ def create_app(*, access_code, origin, providers=(), extractor=None, model_ids=N
         response.delete_cookie("energy_session", path="/api", secure=policy.secure, httponly=True, samesite='strict')
         return response
 
+    app.include_router(setup_routes(store, setup))
     app.include_router(document_routes(store, providers, extractor))
     app.include_router(office_routes(store, models, office_analyzer))
     assets = Path(__file__).resolve().parents[2] / "frontend" / "dist"

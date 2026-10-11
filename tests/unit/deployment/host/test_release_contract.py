@@ -7,6 +7,21 @@ from tests.fixtures.host_release import HOST_DIGEST, release
 
 
 class ReleaseManifestTests(unittest.TestCase):
+    def test_settings_runtime_requires_version_two_and_exact_settings_secret_shape(self):
+        _, _, manifest, _ = release()
+        manifest['runtime']['version'] = 2
+        secret_id = manifest['runtime']['secret_ids'].pop('demo_password')
+        manifest['runtime']['secret_ids'] = {'settings': secret_id}
+        manifest['runtime']['model_ids'] = {'anthropic': 'public-model-fixture'}
+        payload = json.dumps(manifest).encode()
+        self.assertEqual(parse_manifest(payload, hashlib.sha256(payload).hexdigest(), HOST_DIGEST), manifest)
+        for change in ({'version': 1}, {'secret_ids': {'settings': secret_id, 'openai': secret_id + 'x'}},
+                       {'secret_ids': {'demo_password': secret_id}}, {'version': 3}):
+            changed = dict(manifest, runtime=manifest['runtime'] | change)
+            payload = json.dumps(changed).encode()
+            with self.subTest(change=change), self.assertRaises(HostError):
+                parse_manifest(payload, hashlib.sha256(payload).hexdigest(), HOST_DIGEST)
+
     def test_verified_manifest_preserves_nonsecret_runtime_configuration(self):
         digest, payload, manifest, _ = release()
         self.assertEqual(parse_manifest(payload, digest, HOST_DIGEST), manifest)

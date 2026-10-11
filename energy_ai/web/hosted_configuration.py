@@ -32,9 +32,12 @@ class HostedConfiguration:
     backend_host: str
     secret_ids: dict
     model_ids: dict
+    version: int = 1
 
     @property
     def providers(self):
+        if self.version == 2:
+            return ('oci', 'openai', 'anthropic')  # Possible model choices; saved keys control access.
         return ('oci',) + tuple(name for name in ('openai', 'anthropic') if name in self.secret_ids)
 
     @classmethod
@@ -45,9 +48,8 @@ class HostedConfiguration:
             data = json.loads(content, object_pairs_hook=_unique_object)
             if (not isinstance(data, dict) or set(data) != {
                     'version', 'region', 'project', 'origin', 'backend_host', 'secret_ids', 'model_ids'}
-                    or type(data['version']) is not int or data['version'] != 1):
+                    or type(data['version']) is not int or data['version'] not in (1, 2)):
                 raise ValueError()
-            data.pop('version')
             config = cls(**data)
             if REGION_REALMS.get(config.region) != 'oc1':
                 raise ValueError()
@@ -61,8 +63,10 @@ class HostedConfiguration:
                 raise ValueError()
             if not OriginPolicy.validate(config.origin, config.backend_host).secure:
                 raise ValueError()
-            if (not isinstance(config.secret_ids, dict) or 'demo_password' not in config.secret_ids
-                    or set(config.secret_ids) - {'demo_password', 'openai', 'anthropic'}
+            allowed = {'settings'} if config.version == 2 else {'demo_password', 'openai', 'anthropic'}
+            required = 'settings' if config.version == 2 else 'demo_password'
+            if (not isinstance(config.secret_ids, dict) or required not in config.secret_ids
+                    or set(config.secret_ids) - allowed
                     or not all(valid_id(value, 'vaultsecret') for value in config.secret_ids.values())
                     or len(set(config.secret_ids.values())) != len(config.secret_ids)):
                 raise ValueError()

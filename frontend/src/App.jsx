@@ -3,6 +3,7 @@ import { api } from './api.js';
 import BillEditor from './BillEditor.jsx';
 import Insights from './Insights.jsx';
 import OfficeDemo from './OfficeDemo.jsx';
+import FirstRunSetup from './FirstRunSetup.jsx';
 
 export default function App() {
   const generation = useRef(0);
@@ -12,6 +13,8 @@ export default function App() {
   const [checked, setChecked] = useState([]), [result, setResult] = useState(null);
   const [error, setError] = useState(''), [busy, setBusy] = useState(false);
   const [view, setView] = useState('office');
+  const [setupRequired, setSetupRequired] = useState(null), [setupDone, setSetupDone] = useState(false);
+  const [startupError, setStartupError] = useState(false);
   const doc = docs.find(item => item.id === selected);
   function clear() {
     generation.current += 1;
@@ -45,12 +48,25 @@ export default function App() {
     }
     setSelected(value.id); setDraft(structuredClone(value.facts)); setDirty(false); setResult(null);
   }
+  async function initialize(active = () => true) {
+    setStartupError(false);
+    try {
+      const status = await request('/setup');
+      if (typeof status.required !== 'boolean') throw new Error();
+      if (!active()) return;
+      setSetupRequired(status.required);
+      if (!status.required) {
+        try {
+          const value = await request('/session');
+          const documents = await request('/documents');
+          if (active()) { setSession(value); setDocs(documents); }
+        } catch { /* A new presenter has no session yet. */ }
+      }
+    } catch { if (active()) setStartupError(true); }
+  }
   useEffect(() => {
     let active = true;
-    request('/session').then(async value => {
-      const documents = await request('/documents');
-      if (active) { setSession(value); setDocs(documents); }
-    }).catch(() => {});
+    initialize(() => active);
     return () => { active = false; };
   }, []);
   useEffect(() => {
@@ -77,7 +93,12 @@ export default function App() {
     </header>
     <main>
       {error && <div className="error" role="alert">{error}</div>}
-      {!session ? <section className="welcome">
+      {setupDone && !session && <p className="notice" role="status">Setup complete. Sign in with your demo password.</p>}
+      {setupRequired === null ? <section className="welcome">
+        {startupError ? <><p className="error" role="alert">Could not check demo setup. Please try again.</p>
+          <button onClick={() => initialize()}>Retry</button></> : <p role="status">Checking demo setup…</p>}
+      </section> : setupRequired ? <FirstRunSetup completed={() => { setSetupRequired(false); setSetupDone(true); }} />
+        : !session ? <section className="welcome">
         <p className="eyebrow">From a bill to a clearer picture</p><h1>Understand the energy<br />behind the numbers.</h1>
         <p>Review electricity bills, check the facts and explore your consumption and costs.</p>
         <form onSubmit={e => { e.preventDefault(); run(async () => {

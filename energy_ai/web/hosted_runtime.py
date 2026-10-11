@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from oci.auth.signers import InstancePrincipalsSecurityTokenSigner
 from oci.retry import NoneRetryStrategy
 from oci.secrets import SecretsClient
+from oci.vault import VaultsClient
 
 from energy_ai.agents.instance_auth import InstanceAuth
 from energy_ai.agents.office_analysis import analyze_office
@@ -76,6 +77,7 @@ class HostedRuntime:
 
 def load_runtime(config):
     signer = None
+    setup_clients = []
     try:
         signer = InstancePrincipalsSecurityTokenSigner(
             retry_strategy=NoneRetryStrategy(), federation_client_retry_strategy=NoneRetryStrategy())
@@ -84,12 +86,26 @@ def load_runtime(config):
         client = SecretsClient({'region': config.region}, signer=signer, timeout=(10, 30),
                                service_endpoint=f'https://secrets.vaults.{config.region}.oci.oraclecloud.com',
                                retry_strategy=NoneRetryStrategy())
+        if config.version == 2:
+            from energy_ai.web.hosted_setup import HostedSetup
+            from energy_ai.web.setup_secrets import SetupSecrets
+            setup_clients.append(client)
+            vault = VaultsClient({'region': config.region}, signer=signer, timeout=(10, 30),
+                                service_endpoint=f'https://vaults.{config.region}.oci.oraclecloud.com',
+                                retry_strategy=NoneRetryStrategy())
+            setup_clients.append(vault)
+            return HostedSetup(config, signer, SetupSecrets(vault, client, config.secret_ids['settings']))
         try:
             values = {name: _secret(client, secret_id, name) for name, secret_id in config.secret_ids.items()}
         finally:
             client.base_client.session.close()
         return HostedRuntime(config, signer, values)
     except Exception:
+        for owner in setup_clients:
+            try:
+                owner.base_client.session.close()
+            except Exception:
+                pass
         if signer is not None:
             _close_identity(signer)
         raise RuntimeConfigurationError('Hosted OCI identity or Vault credentials are unavailable.') from None

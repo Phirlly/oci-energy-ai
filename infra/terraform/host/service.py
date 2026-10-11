@@ -70,8 +70,9 @@ class HostService:
                 response = connection.getresponse()
                 content = response.read(2049)
                 value = json.loads(content) if len(content) <= 2048 else {}
-                if (response.status == 200 and value == {
-                        "status": "ready", "release": manifest["release"], "schema": 1}):
+                statuses = ("ready", "setup_required") if manifest["runtime"]["version"] == 2 else ("ready",)
+                if (response.status == 200 and any(value == {
+                        "status": status, "release": manifest["release"], "schema": 1} for status in statuses)):
                     return
             except (OSError, ValueError, http.client.HTTPException):
                 pass

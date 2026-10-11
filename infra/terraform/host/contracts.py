@@ -33,7 +33,7 @@ def _runtime_valid(value):
     if not isinstance(value, dict) or set(value) != {
             "version", "region", "project", "origin", "backend_host", "secret_ids", "model_ids"}:
         return False
-    if type(value["version"]) is not int or value["version"] != 1:
+    if type(value["version"]) is not int or value["version"] not in (1, 2):
         return False
     region = value["region"]
     if not isinstance(region, str) or not re.fullmatch(r"[a-z]{2,3}-[a-z][a-z0-9-]{1,30}-[1-9][0-9]?", region):
@@ -51,13 +51,16 @@ def _runtime_valid(value):
                                  for network in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")):
         return False
     secrets = value["secret_ids"]
-    if (not isinstance(secrets, dict) or "demo_password" not in secrets
-            or set(secrets) - {"demo_password", "openai", "anthropic"}
+    allowed = {"settings"} if value["version"] == 2 else {"demo_password", "openai", "anthropic"}
+    required = "settings" if value["version"] == 2 else "demo_password"
+    if (not isinstance(secrets, dict) or required not in secrets
+            or set(secrets) - allowed
             or not all(identifier(item, "vaultsecret") for item in secrets.values())
             or len(set(secrets.values())) != len(secrets)):
         return False
     models = value["model_ids"]
-    return (isinstance(models, dict) and not set(models) - ({"oci"} | (set(secrets) - {"demo_password"}))
+    providers = {"oci", "openai", "anthropic"} if value["version"] == 2 else {"oci"} | (set(secrets) - {"demo_password"})
+    return (isinstance(models, dict) and not set(models) - providers
             and all(isinstance(item, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}", item)
                     for item in models.values()))
 

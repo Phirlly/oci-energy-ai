@@ -32,7 +32,8 @@ def main(*, configuration_path=Path('/etc/energy-ai/runtime.json'),
         runtime = load_runtime(config)
         app = create_app(access_code=runtime.password, origin=config.origin, backend_host=config.backend_host,
                          release=release, providers=runtime.providers, model_ids=config.models(),
-                         extractor=runtime.extract, office_analyzer=runtime.analyze, office_database=database_path)
+                         extractor=runtime.extract, office_analyzer=runtime.analyze, office_database=database_path,
+                         setup=runtime if config.version == 2 else None)
         uvicorn.run(app, host='0.0.0.0', port=8080, workers=1, proxy_headers=False,
                     access_log=False, log_config=None, timeout_graceful_shutdown=15)
         return 0

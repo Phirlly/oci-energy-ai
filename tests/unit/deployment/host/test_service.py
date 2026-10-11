@@ -70,6 +70,22 @@ class ContainerServiceTests(unittest.TestCase):
         connection.return_value.close.assert_called_once()
 
     @patch("infra.terraform.host.service.http.client.HTTPConnection")
+    def test_setup_required_is_healthy_only_for_explicit_settings_runtime(self, connection):
+        response = connection.return_value.getresponse.return_value
+        response.status = 200
+        response.read.return_value = json.dumps({
+            'status': 'setup_required', 'release': self.manifest['release'], 'schema': 1}).encode()
+        for version in (1, 2):
+            self.manifest['runtime']['version'] = version
+            self.service.monotonic = Mock(side_effect=[0, 0, 0, 121, 121])
+            self.service.sleep = Mock()
+            if version == 2:
+                self.service.health(self.manifest)
+            else:
+                with self.assertRaises(HostError):
+                    self.service.health(self.manifest)
+
+    @patch("infra.terraform.host.service.http.client.HTTPConnection")
     def test_wrong_release_or_schema_never_establishes_readiness(self, connection):
         response = connection.return_value.getresponse.return_value
         response.status = 200

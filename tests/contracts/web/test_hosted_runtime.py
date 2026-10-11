@@ -12,9 +12,19 @@ from energy_ai.web.hosted_configuration import HostedConfiguration, RuntimeConfi
 from energy_ai.web.hosted_runtime import HostedRuntime, load_runtime
 from tests.fixtures.deployment_environment import configured_environment
 from tests.fixtures.hosted_runtime import CONFIG, PASSWORD, SECRET, bundle
+from tests.fixtures.setup_runtime import MemoryVault, SETTINGS_CONFIG
 
 
 class HostedConfigurationTests(unittest.TestCase):
+    def test_settings_mode_has_explicit_version_and_accepts_optional_model_choices(self):
+        parsed = HostedConfiguration.from_bytes(json.dumps(SETTINGS_CONFIG).encode())
+        self.assertEqual(parsed.version, 2)
+        self.assertEqual(parsed.models()['openai'], 'public-model-fixture')
+        for change in ({'version': 1}, {'secret_ids': {'settings': SECRET, 'openai': SECRET + 'x'}},
+                       {'secret_ids': {'demo_password': SECRET}}, {'version': 3}):
+            with self.subTest(change=change), self.assertRaises(RuntimeConfigurationError):
+                HostedConfiguration.from_bytes(json.dumps(SETTINGS_CONFIG | change).encode())
+
     def test_valid_configuration_and_strict_rejections(self):
         parsed = HostedConfiguration.from_bytes(json.dumps(CONFIG).encode())
         self.assertEqual(parsed.providers, ('oci',))
@@ -54,6 +64,24 @@ class VaultRuntimeTests(unittest.TestCase):
         self.signer_factory = self.enterContext(patch('energy_ai.web.hosted_runtime.InstancePrincipalsSecurityTokenSigner',
                                                      return_value=self.signer))
         self.client_factory = self.enterContext(patch('energy_ai.web.hosted_runtime.SecretsClient', return_value=self.client))
+
+    def test_settings_runtime_keeps_scoped_clients_until_close_and_loads_completed_state(self):
+        import threading
+        vault = MemoryVault({'version': 1, 'password': 'admin', 'keys': {'anthropic': 'fixture-key'}})
+        closed = threading.Event()
+        vault.base_client.session.close.side_effect = closed.set
+        self.client_factory.return_value = vault
+        with patch('energy_ai.web.hosted_runtime.VaultsClient', return_value=vault) as factory:
+            runtime = load_runtime(HostedConfiguration.from_bytes(json.dumps(SETTINGS_CONFIG).encode()))
+        self.assertEqual(runtime.password, 'admin')
+        self.assertEqual(runtime.providers, ['oci', 'anthropic'])
+        self.assertFalse(runtime.required)
+        self.assertFalse(closed.is_set())
+        options = factory.call_args.kwargs
+        self.assertEqual(options['service_endpoint'], 'https://vaults.us-ashburn-1.oci.oraclecloud.com')
+        self.assertEqual(type(options['retry_strategy']).__name__, 'NoneRetryStrategy')
+        runtime.close()
+        self.assertTrue(closed.wait(2))
 
     def test_reads_current_in_memory_without_key_profile_or_environment_fallback(self):
         with patch('oci.config.from_file') as profile, patch.dict('os.environ', {'OPENAI_API_KEY': 'unrequested-key'}):

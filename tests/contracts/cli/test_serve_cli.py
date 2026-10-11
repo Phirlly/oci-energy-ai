@@ -12,6 +12,7 @@ from unittest.mock import MagicMock, patch
 from energy_ai.web import serve
 from energy_ai.web.hosted_configuration import HostedConfiguration
 from tests.fixtures.hosted_runtime import CONFIG, PASSWORD
+from tests.fixtures.setup_runtime import SETTINGS_CONFIG
 
 
 class HostedEntrypointTests(unittest.TestCase):
@@ -70,6 +71,14 @@ class HostedEntrypointTests(unittest.TestCase):
         self.runtime.close.assert_called_once()
         self.assertNotIn('private-marker', self.error.getvalue())
         self.assertNotIn('Traceback', self.error.getvalue())
+
+    def test_version_two_hands_setup_runtime_to_app_without_a_temporary_password(self):
+        self.configuration.write_text(json.dumps(SETTINGS_CONFIG))
+        self.runtime.password = ''
+        with patch('energy_ai.web.app.create_app') as create:
+            self.assertEqual(self.invoke(), 0)
+        self.assertIs(create.call_args.kwargs['setup'], self.runtime)
+        self.assertEqual(create.call_args.kwargs['access_code'], '')
 
     def test_invalid_image_release_fails_before_loading_secrets(self):
         for content in ('../private-marker', 'b' * 40 + '\n private-marker'):

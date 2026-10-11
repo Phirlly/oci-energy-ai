@@ -1,0 +1,163 @@
+import base64
+import json
+import unittest
+from unittest.mock import Mock, patch
+
+from oci.exceptions import ServiceError
+from oci.auth.signers import InstancePrincipalsSecurityTokenSigner
+from oci.retry import NoneRetryStrategy
+from oci.secrets import SecretsClient
+from oci.vault import VaultsClient
+
+from energy_ai.web.setup_secrets import AlreadyConfigured, SetupError, SetupSecrets
+from tests.fixtures.hosted_runtime import SECRET, bundle
+from tests.fixtures.setup_runtime import CODE, MemoryVault, PENDING
+
+
+class SetupPersistenceTests(unittest.TestCase):
+    def setUp(self):
+        self.vault = MemoryVault()
+        self.store = SetupSecrets(self.vault, self.vault, SECRET)
+
+    def test_claim_replaces_current_once_preserving_exact_password_and_optional_keys(self):
+        password = ' énergie solaire ☀ '
+        result = self.store.complete(CODE, password, {'openai': 'invented-key'})
+        self.assertEqual(result, {'version': 1, 'password': password, 'keys': {'openai': 'invented-key'}})
+        self.assertEqual(len(self.vault.writes), 1)
+        identity, details, guard = self.vault.writes[0]
+        self.assertEqual((identity, guard), (SECRET, '1'))
+        self.assertFalse(details.enable_auto_generation)
+        self.assertEqual(details.secret_content.stage, 'CURRENT')
+        self.assertIsNone(details.current_version_number)
+        self.assertEqual(details.freeform_tags, {'application': 'oci-energy-ai', 'energy_ai_setup': 'complete'})
+        self.assertEqual(json.loads(base64.b64decode(details.secret_content.content)), result)
+        self.assertEqual(self.store.read().value, result)
+
+    def test_wrong_code_invalid_fields_and_replay_never_overwrite_configuration(self):
+        for code, password, keys in [(CODE + ' ', 'admin', {}), (CODE, ' ', {}),
+                                     (CODE, 'x' * 201, {}), (CODE, 'admin', {'openai': 'bad key'}),
+                                     (CODE, 'admin', {'unknown': 'private-marker'})]:
+            with self.subTest(code=code == CODE), self.assertRaises(SetupError) as raised:
+                self.store.complete(code, password, keys)
+            self.assertNotIn('private-marker', str(raised.exception))
+        self.assertEqual(self.vault.writes, [])
+        self.store.complete(CODE, 'admin', {})
+        with self.assertRaises(AlreadyConfigured) as raised:
+            self.store.complete(CODE, 'other', {})
+        self.assertEqual(raised.exception.value['password'], 'admin')
+        self.assertEqual(len(self.vault.writes), 1)
+
+    def test_lost_response_is_verified_without_replaying_the_write(self):
+        original = self.vault.update_secret
+        def committed(*args, **kwargs):
+            original(*args, **kwargs)
+            raise TimeoutError('private-marker')
+        with patch.object(self.vault, 'update_secret', side_effect=committed) as update:
+            self.assertEqual(self.store.complete(CODE, 'admin', {})['password'], 'admin')
+        update.assert_called_once()
+
+    def test_escaped_maximum_keys_cannot_commit_a_payload_that_exceeds_read_limit(self):
+        keys = {'openai': '"' * 4096, 'anthropic': '"' * 4096}
+        encoded = json.dumps({'version': 1, 'password': 'admin', 'keys': keys},
+                             sort_keys=True, separators=(',', ':')).encode()
+        self.assertGreater(len(encoded), 16384)
+        with self.assertRaises(SetupError) as raised:
+            self.store.complete(CODE, 'admin', keys)
+        self.assertEqual(raised.exception.status, 422)
+        self.assertEqual(self.vault.writes, [])
+        self.assertEqual(self.store.read().value, PENDING)
+
+    def test_uncommitted_or_unreadable_write_fails_privately_without_retry(self):
+        for failure in (TimeoutError('private-marker'), ServiceError(403, 'Forbidden', {}, 'private-marker')):
+            with self.subTest(failure=type(failure).__name__), patch.object(
+                    self.vault, 'update_secret', side_effect=failure) as update:
+                with self.assertRaises(SetupError) as raised:
+                    self.store.complete(CODE, 'admin', {})
+                self.assertNotIn('private-marker', str(raised.exception))
+                update.assert_called_once()
+            self.assertEqual(self.vault.value, PENDING)
+
+    def test_stale_claim_cannot_overwrite_a_different_completed_configuration(self):
+        original = self.vault.update_secret
+        def competitor(secret_id, details, **kwargs):
+            self.vault.value = {'version': 1, 'password': 'winner', 'keys': {}}
+            self.vault.tags['energy_ai_setup'] = 'complete'
+            self.vault.version += 1
+            return original(secret_id, details, **kwargs)
+        with patch.object(self.vault, 'update_secret', side_effect=competitor) as update:
+            with self.assertRaises(AlreadyConfigured) as raised:
+                self.store.complete(CODE, 'loser', {})
+        self.assertEqual(raised.exception.value['password'], 'winner')
+        update.assert_called_once()
+
+
+class SetupReadContracts(unittest.TestCase):
+    def setUp(self):
+        self.vault = MemoryVault()
+        self.store = SetupSecrets(self.vault, self.vault, SECRET)
+
+    def test_reads_exact_metadata_version_and_requires_current_identity(self):
+        with patch.object(self.vault, 'get_secret_bundle', wraps=self.vault.get_secret_bundle) as read:
+            self.assertEqual(self.store.read().value, PENDING)
+        self.assertEqual(read.call_args.kwargs['version_number'], 1)
+        for change in ({'version_number': 2}, {'stages': ['PREVIOUS']}, {'secret_id': SECRET + 'z'}):
+            response = bundle(value=json.dumps(PENDING), **change)
+            with self.subTest(change=change), patch.object(self.vault, 'get_secret_bundle', return_value=response):
+                with self.assertRaises(SetupError):
+                    self.store.read()
+
+    def test_malformed_or_reopened_claim_state_fails_closed(self):
+        complete = {'version': 1, 'password': 'admin', 'keys': {}}
+        for value, marker in [(PENDING, 'complete'), (complete, None), (PENDING, 'unknown'),
+                              (PENDING | {'version': True}, None),
+                              (PENDING | {'setup_code': ''}, None),
+                              (complete | {'keys': {'openai': ''}}, 'complete')]:
+            self.vault.value, self.vault.tags = value, {}
+            if marker is not None:
+                self.vault.tags['energy_ai_setup'] = marker
+            with self.subTest(marker=marker), self.assertRaises(SetupError):
+                self.store.read()
+
+    def test_duplicate_oversized_or_invalid_json_and_missing_metadata_are_rejected(self):
+        for raw in ('{"version":1,"version":1}', 'x' * 24577, '[]', '{'):
+            with self.subTest(raw=raw[:20]), patch.object(
+                    self.vault, 'get_secret_bundle', return_value=bundle(value=raw)):
+                with self.assertRaises(SetupError):
+                    self.store.read()
+        for field, value in [('id', SECRET + 'x'), ('lifecycle_state', 'UPDATING'),
+                             ('current_version_number', None), ('current_version_number', True)]:
+            metadata = self.vault.get_secret(SECRET)
+            setattr(metadata.data, field, value)
+            with self.subTest(field=field), patch.object(self.vault, 'get_secret', return_value=metadata):
+                with self.assertRaises(SetupError):
+                    self.store.read()
+        metadata = self.vault.get_secret(SECRET)
+        metadata.headers.clear()
+        with patch.object(self.vault, 'get_secret', return_value=metadata), self.assertRaises(SetupError):
+            self.store.read()
+
+
+class SetupSdkRequests(unittest.TestCase):
+    def test_real_sdk_translates_version_guard_and_current_content_without_retries(self):
+        memory = MemoryVault()
+        signer = Mock(spec=InstancePrincipalsSecurityTokenSigner)
+        vault = VaultsClient({'region': 'us-ashburn-1'}, signer=signer, retry_strategy=NoneRetryStrategy())
+        bundles = SecretsClient({'region': 'us-ashburn-1'}, signer=signer, retry_strategy=NoneRetryStrategy())
+        store = SetupSecrets(vault, bundles, SECRET)
+        self.addCleanup(store.close)
+        def control(**request):
+            if request['operation_name'] == 'get_secret':
+                return memory.get_secret(SECRET)
+            return memory.update_secret(SECRET, request['body'], if_match=request['header_params']['if-match'])
+        def content(**request):
+            return memory.get_secret_bundle(SECRET, version_number=request['query_params']['versionNumber'])
+        with patch.object(vault.base_client, 'call_api', side_effect=control) as write, patch.object(
+                bundles.base_client, 'call_api', side_effect=content) as read:
+            self.assertEqual(store.complete(CODE, 'admin', {})['password'], 'admin')
+        updates = [call.kwargs for call in write.call_args_list if call.kwargs['operation_name'] == 'update_secret']
+        self.assertEqual(len(updates), 1)
+        self.assertEqual(updates[0]['header_params']['if-match'], '1')
+        self.assertFalse(updates[0]['body'].enable_auto_generation)
+        self.assertEqual(updates[0]['body'].secret_content.stage, 'CURRENT')
+        self.assertEqual([call.kwargs['query_params'] for call in read.call_args_list],
+                         [{'versionNumber': 1}, {'versionNumber': 2}])
