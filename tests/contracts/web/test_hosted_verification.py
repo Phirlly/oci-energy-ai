@@ -3,13 +3,14 @@ import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
 from deployment.configuration import DeploymentError
 from deployment.resource_jobs import OperationDeadline
 from deployment.verify_hosted import HostedVerifier
+from energy_ai.agents.analysis import AnalysisError
 from energy_ai.agents.office_analysis import analyze_office
 from energy_ai.bills.extraction import ExtractionResult
 from energy_ai.bills.schema import Candidate
@@ -172,4 +173,66 @@ class HostedVerificationTests(unittest.TestCase):
         with self.assertRaisesRegex(DeploymentError, 'provider journey') as raised:
             self.verifier.check(full=True)
         self.assertNotIn('private-provider-detail', str(raised.exception))
+        self.assertIn('provider=oci; stage=office_analysis; status=failed; category=unclassified',
+                      str(raised.exception))
         self.assertEqual(self.app.state.sessions.items, {})
+
+    def test_office_failures_report_fixed_categories_and_stop_before_extraction(self):
+        categories = ('verification', 'timeout', 'authentication', 'access', 'rate_limit', 'provider_error')
+        self.config.secret_ids['openai'] = self.config.secret_ids['demo_password'] + 'openai'
+        for category in categories:
+            with self.subTest(category=category):
+                analyze = AsyncMock(side_effect=AnalysisError(category))
+                extract = AsyncMock(side_effect=AssertionError('Extraction must not start.'))
+                app = create_app(**(self.options | dict(providers=self.config.providers,
+                    model_ids=self.config.models(), office_analyzer=analyze, extractor=extract)))
+                with TestClient(app, base_url=self.config.origin,
+                                headers={'Host': self.config.backend_host}) as client:
+                    verifier = HostedVerifier(client, self.config, 'admin', self.manifest['release'],
+                                              self.verifier.deadline)
+                    with self.assertRaises(DeploymentError) as raised:
+                        verifier.check(full=True)
+                    self.assertIn('provider=oci; stage=office_analysis; status=failed; category=' + category,
+                                  str(raised.exception))
+                    self.assertEqual(app.state.sessions.items, {})
+                    self.assertEqual(client.get('/api/office').status_code, 401)
+                analyze.assert_awaited_once()
+                self.assertEqual(analyze.await_args.args[0], 'oci')
+                extract.assert_not_awaited()
+
+    def test_failed_bill_job_identifies_extraction_and_cleans_session(self):
+        extract = AsyncMock(side_effect=RuntimeError('private-test-marker'))
+        app = create_app(**(self.options | dict(extractor=extract)))
+        with TestClient(app, base_url=self.config.origin,
+                        headers={'Host': self.config.backend_host}) as client:
+            verifier = HostedVerifier(client, self.config, 'admin', self.manifest['release'],
+                                      self.verifier.deadline)
+            with self.assertRaises(DeploymentError) as raised:
+                verifier.check(full=True)
+            message = str(raised.exception)
+            self.assertIn('provider=oci; stage=bill_extraction; status=failed; category=unclassified', message)
+            self.assertNotIn('private-test-marker', message)
+            self.assertEqual(app.state.sessions.items, {})
+            self.assertEqual(client.get('/api/office').status_code, 401)
+        extract.assert_awaited_once()
+
+    def test_polling_projects_untrusted_status_and_error_shapes_onto_fixed_labels(self):
+        cases = [
+            (None, 'invalid'), ({}, 'invalid'),
+            ({'status': 'private-test-marker', 'error': 'private-test-marker'}, 'invalid'),
+            ({'status': ['private-test-marker']}, 'invalid'),
+            ({'status': 'failed', 'error': {'private-test-marker': 1}}, 'failed'),
+            ({'status': 'failed', 'error': str(AnalysisError('access')) + ' private-test-marker'}, 'failed'),
+            ({'status': 'cancelled'}, 'cancelled'), ({'status': 'interrupted'}, 'interrupted'),
+        ]
+        for document in (False, True):
+            stage = 'bill_extraction' if document else 'office_analysis'
+            for job, status in cases:
+                with self.subTest(document=document, status=status, job=job):
+                    response = {'job': job} if document else job
+                    with patch.object(self.verifier, '_request', return_value=response) as request:
+                        with self.assertRaises(DeploymentError) as raised:
+                            self.verifier._poll('/private-test-marker', provider='openai', document=document)
+                    self.assertEqual(str(raised.exception), 'Hosted provider journey did not complete successfully: '
+                        f'provider=openai; stage={stage}; status={status}; category=unclassified')
+                    request.assert_called_once()

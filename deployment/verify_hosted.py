@@ -6,10 +6,13 @@ from uuid import UUID, uuid4
 
 from deployment.configuration import DeploymentError
 from deployment.verify_bills import ExpectedFactsError, check_facts
+from energy_ai.agents.analysis import AnalysisError
 from energy_ai.bills.schema import Candidate, Facts
 
 
 CONTROLS = dict(power_kw=25.0, capacity_kwh=100.0, efficiency=0.9, target_kw=80.0)
+_OFFICE_FAILURES = {str(AnalysisError(category)): category for category in (
+    'verification', 'timeout', 'authentication', 'access', 'rate_limit', 'provider_error')}
 
 
 class HostedVerifier:
@@ -38,16 +41,22 @@ class HostedVerifier:
         except Exception:
             raise DeploymentError('Hosted request failed; response details suppressed.') from None
 
-    def _poll(self, path, *, document=False):
+    def _poll(self, path, *, provider, document=False):
         while True:
             result = self._request('GET', path)
-            job = result.get('job') if document else result
-            if not isinstance(job, dict):
-                raise DeploymentError('Hosted job response was invalid.')
-            if job.get('status') == 'complete':
+            job = result.get('job') if document and isinstance(result, dict) else result
+            status = job.get('status') if isinstance(job, dict) else None
+            if status == 'complete':
                 return result
-            if job.get('status') != 'running':
-                raise DeploymentError('Hosted provider journey did not complete successfully.')
+            if status != 'running':
+                state = status if status in ('failed', 'cancelled', 'interrupted') else 'invalid'
+                name = provider if provider in ('oci', 'openai', 'anthropic') else 'unknown'
+                stage = 'bill_extraction' if document else 'office_analysis'
+                error = job.get('error') if isinstance(job, dict) else None
+                category = (_OFFICE_FAILURES.get(error, 'unclassified')
+                            if not document and state == 'failed' and type(error) is str else 'unclassified')
+                raise DeploymentError('Hosted provider journey did not complete successfully: '
+                    f'provider={name}; stage={stage}; status={state}; category={category}')
             self.deadline.pause()
 
     def _bills(self):
@@ -69,7 +78,7 @@ class HostedVerifier:
     def _provider(self, provider, document_path):
         run = self._request('POST', '/api/office/runs', status=202, json=dict(
             request_key=str(uuid4()), provider=provider, consent=True, controls=CONTROLS, question='evaluate_battery'))
-        run = self._poll('/api/office/runs/' + run['id'])
+        run = self._poll('/api/office/runs/' + run['id'], provider=provider)
         result = run['result']
         if (result['usage']['tool_calls'] != 2 or result['usage']['model_requests'] < 2
                 or result['energy']['baseline_total_usd'] != '6710.80'
@@ -78,7 +87,7 @@ class HostedVerifier:
                    != {'inspect_office', 'simulate_selected_battery'}):
             raise DeploymentError('Hosted office tool evidence differs from expected results.')
         self._request('POST', document_path + '/extract', status=202, json={'provider': provider, 'consent': True})
-        doc = self._poll(document_path, document=True)
+        doc = self._poll(document_path, provider=provider, document=True)
         stage = 'job_metadata'
         try:
             if doc['approved_revision'] is not None or doc['job']['usage']['requests'] < 1:
