@@ -17,7 +17,11 @@ class Sourced(StrictModel, Generic[T]):
 
 
 class BillProposal(StrictModel):
-    supplier: Sourced[Text] | None
+    supplier: Sourced[Text] | None = Field(description=(
+        "Name of the issuing utility or organization as printed, excluding surrounding "
+        "statement headings, labels or notices. The exact evidence quote may include "
+        "that surrounding text; the value contains only the issuer name."
+    ))
     account: Sourced[Text] | None
     meter: Sourced[Text] | None
     service: Sourced[Literal["electricity", "water", "gas", "mixed"]] | None

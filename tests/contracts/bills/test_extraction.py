@@ -14,6 +14,14 @@ class BillAgentContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.candidate.facts.current_total, 91.50)
         self.assertEqual(result.requests, 1)
         self.assertEqual(result.candidate.evidence["consumption"].offset, 0)
+        schema = json.loads(model.requests[0]["system_instructions"].split("\nSchema:\n", 1)[1])
+        supplier = schema["properties"]["supplier"]
+        self.assertIn("supplier", schema["required"])
+        self.assertIn({"type": "null"}, supplier["anyOf"])
+        for rule in ("issuing utility or organization", "as printed", "excluding", "headings", "evidence"):
+            self.assertIn(rule, supplier.get("description", ""))
+        self.assertEqual(result.candidate.facts.supplier, "Juniper Power")
+        self.assertEqual(result.candidate.evidence["supplier"].quote, TEXT)
 
     async def test_malformed_or_invented_evidence_is_safe_failure(self):
         invented = proposal()
