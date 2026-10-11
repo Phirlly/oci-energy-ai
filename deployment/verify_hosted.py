@@ -1,6 +1,8 @@
 """Opt-in public HTTPS journeys; never emit passwords, bill contents or model text."""
 
-from uuid import uuid4
+import hashlib
+import json
+from uuid import UUID, uuid4
 
 from deployment.configuration import DeploymentError
 from deployment.verify_bills import check_facts
@@ -32,7 +34,6 @@ class HostedVerifier:
                 payload = b''.join(chunks)
                 if raw:
                     return payload
-                import json
                 return json.loads(payload)
         except Exception:
             raise DeploymentError('Hosted request failed; response details suppressed.') from None
@@ -87,6 +88,29 @@ class HostedVerifier:
         except Exception:
             raise DeploymentError('Hosted bill extraction lacks verified public-fixture evidence.') from None
 
+    def _history(self):
+        try:
+            records = self._request('GET', '/api/office/runs')
+            if not isinstance(records, list) or len(records) > 100:
+                raise ValueError()
+            seen, fingerprints = set(), {}
+            for record in records:
+                if not isinstance(record, dict):
+                    raise ValueError()
+                identifier, status = record['id'], record['status']
+                if (not isinstance(identifier, str) or str(UUID(identifier)) != identifier
+                        or identifier in seen or status not in {'running', 'complete', 'failed', 'cancelled', 'interrupted'}):
+                    raise ValueError()
+                seen.add(identifier)
+                if status == 'complete':
+                    if not isinstance(record['result'], dict):
+                        raise ValueError()
+                    content = json.dumps(record, sort_keys=True, separators=(',', ':'), allow_nan=False).encode('utf-8')
+                    fingerprints[identifier] = hashlib.sha256(content).hexdigest()
+            return fingerprints
+        except Exception:
+            raise DeploymentError('Hosted public history evidence was invalid; response details suppressed.') from None
+
     def check(self, *, full=False):
         logged_in = False
         try:
@@ -110,7 +134,10 @@ class HostedVerifier:
                     self._provider(provider, document_path)
                     checked.append(provider)
                 self._request('DELETE', document_path)
-            return dict(health=True, login=True, office_scenario=True, bill_upload_review=full, providers=checked)
+            result = dict(health=True, login=True, office_scenario=True, bill_upload_review=full, providers=checked)
+            if full:
+                result['history'] = self._history()
+            return result
         except DeploymentError:
             raise
         except Exception:

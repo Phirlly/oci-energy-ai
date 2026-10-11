@@ -4,8 +4,8 @@ An OCI demo for reviewing electricity bills and exploring battery scenarios.
 The browser connects a prepared office month, battery scenarios, two tool-using
 analysts and personal bill review. Python/FastAPI and React run on OCI; the OpenAI
 Agents SDK orchestrates OCI, OpenAI and Anthropic model adapters.
-**Status:** local journeys and provider checks are verified. The new automated
-OCI hosting workflow is awaiting its first live validation.
+**Status:** OCI hosting, HTTPS login and prepared calculations are verified.
+Full hosted provider checks and deployment lifecycle rehearsal are in progress.
 
 ## Try the demo
 
