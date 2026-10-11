@@ -5,7 +5,7 @@ import json
 from uuid import UUID, uuid4
 
 from deployment.configuration import DeploymentError
-from deployment.verify_bills import check_facts
+from deployment.verify_bills import ExpectedFactsError, check_facts
 from energy_ai.bills.schema import Candidate, Facts
 
 
@@ -79,14 +79,23 @@ class HostedVerifier:
             raise DeploymentError('Hosted office tool evidence differs from expected results.')
         self._request('POST', document_path + '/extract', status=202, json={'provider': provider, 'consent': True})
         doc = self._poll(document_path, document=True)
+        stage = 'job_metadata'
         try:
             if doc['approved_revision'] is not None or doc['job']['usage']['requests'] < 1:
                 raise ValueError()
+            stage = 'proposal_evidence'
             proposal = Candidate.model_validate(doc['proposal']).verify(doc['pages'])
+            stage = 'proposal_facts'
             check_facts(proposal.facts, 0)
+            stage = 'reviewed_facts'
             check_facts(Facts.model_validate(doc['facts']), 0)
+        except ExpectedFactsError as error:
+            diagnostics = json.dumps(error.diagnostics, sort_keys=True, allow_nan=False)
+            raise DeploymentError(f'Hosted bill verification failed: provider={provider}; stage={stage}; '
+                                  f'diagnostics={diagnostics}') from None
         except Exception:
-            raise DeploymentError('Hosted bill extraction lacks verified public-fixture evidence.') from None
+            raise DeploymentError(f'Hosted bill verification failed: provider={provider}; stage={stage}; '
+                                  'response details suppressed.') from None
 
     def _history(self):
         try:

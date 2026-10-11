@@ -1,3 +1,4 @@
+from copy import deepcopy
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -14,6 +15,7 @@ from energy_ai.bills.extraction import ExtractionResult
 from energy_ai.bills.schema import Candidate
 from energy_ai.web.app import create_app
 from energy_ai.web.hosted_configuration import HostedConfiguration
+from energy_ai.web.sessions import Document
 from tests.fixtures.agent_responses import ScriptedModel
 from tests.fixtures.bills import candidate
 from tests.fixtures.host_release import release
@@ -107,6 +109,55 @@ class HostedVerificationTests(unittest.TestCase):
             self.verifier.check()
         self.assertNotIn('private-marker', str(raised.exception))
         self.assertNotIn('Incorrect launch code', str(raised.exception))
+
+    def bill_failure(self, change):
+        original = Document.public
+        def altered(document):
+            value = deepcopy(original(document))
+            if value['job'] and value['job']['status'] == 'complete':
+                change(value)
+            return value
+        with patch.object(Document, 'public', altered):
+            with self.assertRaises(DeploymentError) as raised:
+                self.verifier.check(full=True)
+        message = str(raised.exception)
+        self.assertIn('provider=oci', message)
+        self.assertNotIn('private-test-marker', message)
+        self.assertNotIn(self.verifier.password, message)
+        self.assertEqual(self.app.state.sessions.items, {})
+        self.assertEqual(self.client.get('/api/office').status_code, 401)
+        return message
+
+    def test_completed_bill_fact_diagnostics_identify_stage_without_values(self):
+        cases = [
+            ('proposal_facts', lambda value: value['proposal']['facts'].update(account='private-test-marker'),
+             {'fields': ['account']}),
+            ('proposal_facts', lambda value: value['proposal']['facts'].update(supplier='Juniper Power private-test-marker'),
+             {'fields': ['supplier'], 'supplier_absent': False, 'supplier_normalized_match': False,
+              'supplier_contains_expected': True}),
+            ('reviewed_facts', lambda value: value['facts'].update(account='private-test-marker'),
+             {'fields': ['account']}),
+        ]
+        for stage, change, expected in cases:
+            with self.subTest(stage=stage, fields=expected['fields']):
+                message = self.bill_failure(change)
+                self.assertIn('stage=' + stage, message)
+                self.assertEqual(json.loads(message.split('diagnostics=', 1)[1]), expected)
+
+    def test_completed_bill_metadata_schema_and_evidence_failures_suppress_details(self):
+        cases = [
+            ('job_metadata', lambda value: value['job']['usage'].update(requests=0)),
+            ('job_metadata', lambda value: value.update(approved_revision=1)),
+            ('proposal_evidence', lambda value: value['proposal']['facts'].update(service='private-test-marker')),
+            ('proposal_evidence', lambda value: value['proposal']['evidence']['account'].update(quote='private-test-marker')),
+            ('reviewed_facts', lambda value: value['facts'].update(service='private-test-marker')),
+        ]
+        for stage, change in cases:
+            with self.subTest(stage=stage):
+                message = self.bill_failure(change)
+                self.assertIn('stage=' + stage, message)
+                self.assertIn('response details suppressed', message)
+                self.assertNotIn('diagnostics=', message)
 
     def test_stale_release_fails_before_login(self):
         self.verifier.release = 'b' * 40
