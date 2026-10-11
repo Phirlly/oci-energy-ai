@@ -94,10 +94,11 @@ class ApplicationSetupTests(unittest.TestCase):
         self.assertEqual(missing, ["DEMO_PASSWORD"])
         self.assertTrue(check_deployment_setup(self.environment, application=True).complete)
 
-    def test_password_exact_boundaries_and_character_restrictions(self):
-        cases = [("!" * 24, True), ("~" * 200, True), ("x" * 23, False),
-                 ("x" * 201, False), ("x" * 24 + " ", False), ("x" * 24 + "\n", False),
-                 ("x" * 24 + "\x7f", False), ("x" * 24 + "é", False), (True, False)]
+    def test_password_accepts_operator_choices_with_bounded_printable_input(self):
+        cases = [("admin", True), ("!", True), ("é" * 200, True),
+                 (" an energy demo ", True), ("énergie solaire ☀", True),
+                 ("x" * 201, False), ("   ", False), ("admin\n", False),
+                 ("admin\t", False), ("admin\x7f", False), ("admin\ud800", False), (True, False)]
         for value, accepted in cases:
             with self.subTest(value_type=type(value).__name__, accepted=accepted):
                 report = check_deployment_setup(self.environment | {"DEMO_PASSWORD": value}, application=True)

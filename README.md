@@ -103,7 +103,7 @@ of uploaded-bill analysis.
 | `OCI_PRIVATE_KEY` | Secret | Matching PEM signing key |
 | `OCI_PRIVATE_KEY_PASSPHRASE` | Secret | Only for an encrypted key |
 | `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` | Secrets | Optional external providers |
-| `DEMO_PASSWORD` | Secret | Browser login password: 24–200 random printable ASCII characters without spaces; for application deployment |
+| `DEMO_PASSWORD` | Secret | Your chosen browser password or passphrase; nonblank, up to 200 printable characters, including spaces and Unicode |
 
 3. Run **Check deployment setup** on `dev` or validated `main`. This checks presence
    and formats, including the browser password, without displaying secrets. It does

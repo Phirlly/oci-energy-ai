@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 test.use({ baseURL: 'http://127.0.0.1:8767' });
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
-  await page.getByLabel('Launch code').fill('public-browser-test-code');
+  await page.getByLabel('Launch code').fill('admin');
   await page.getByRole('button', { name: 'Start session' }).click();
   await expect(page.getByRole('heading', { name: 'A month in the office.' })).toBeVisible();
 });

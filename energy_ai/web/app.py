@@ -20,6 +20,7 @@ from energy_ai.office.run_service import RunService
 from energy_ai.web.requests import Login, read_contract
 from energy_ai.web.sessions import Sessions, TTL
 from energy_ai.web.origin import OriginPolicy
+from energy_ai.web.passwords import PASSWORD_GUIDANCE, valid_password
 
 
 def create_app(*, access_code, origin, providers=(), extractor=None, model_ids=None, clock=time.monotonic,
@@ -28,9 +29,8 @@ def create_app(*, access_code, origin, providers=(), extractor=None, model_ids=N
     if ((policy.secure and (not isinstance(release, str) or not re.fullmatch(r'[a-f0-9]{40}', release)))
             or (not policy.secure and release is not None)):
         raise ValueError('Hosted serving requires an immutable release identifier.')
-    if (not isinstance(access_code, str) or not (24 if policy.secure else 12) <= len(access_code) <= 200
-            or access_code != access_code.strip()):
-        raise ValueError('Invalid presenter password length or whitespace.')
+    if not valid_password(access_code):
+        raise ValueError(PASSWORD_GUIDANCE)
     store = Sessions(clock)
     models = {p: (model_ids or {}).get(p) or DEFAULT_MODELS[p] for p in providers}
 
@@ -92,7 +92,7 @@ def create_app(*, access_code, origin, providers=(), extractor=None, model_ids=N
     async def login(request: Request):
         store.login_attempt()
         body = await read_contract(request, Login)
-        if not hmac.compare_digest(body.code.encode(), access_code.encode()):
+        if not valid_password(body.code) or not hmac.compare_digest(body.code.encode(), access_code.encode()):
             raise HTTPException(401, "Incorrect launch code.")
         old = request.cookies.get("energy_session")
         if old:

@@ -7,6 +7,7 @@ import os
 import re
 
 from deployment.configuration import validate_deployment_value
+from energy_ai.web.passwords import PASSWORD_GUIDANCE, valid_password
 
 
 _TERRAFORM_FIELDS = {
@@ -30,8 +31,8 @@ _VARIABLE_GUIDANCE = {
 _OPTIONAL_SECRETS = (
     "OCI_PRIVATE_KEY_PASSPHRASE", "OPENAI_API_KEY", "ANTHROPIC_API_KEY",
 )
-_APPLICATION_SECRET_BOUNDS = {
-    "DEMO_PASSWORD": (24, 200), "OPENAI_API_KEY": (1, 4096), "ANTHROPIC_API_KEY": (1, 4096),
+_PROVIDER_KEY_BOUNDS = {
+    "OPENAI_API_KEY": (1, 4096), "ANTHROPIC_API_KEY": (1, 4096),
 }
 
 
@@ -78,10 +79,17 @@ def check_deployment_setup(environment: Mapping[str, str], *, application=False)
     settings = ("OCI_PRIVATE_KEY", *_OPTIONAL_SECRETS) + (("DEMO_PASSWORD",) if application else ())
     for setting in settings:
         value = environment.get(setting)
-        if application and setting in _APPLICATION_SECRET_BOUNDS:
-            minimum, maximum = _APPLICATION_SECRET_BOUNDS[setting]
+        if application and setting == "DEMO_PASSWORD":
             if value is None or value == "":
-                status = "missing" if setting == "DEMO_PASSWORD" else "not_configured"
+                status = "missing"
+            else:
+                status = "format_accepted" if valid_password(value) else "invalid"
+            checks.append(SetupCheck(setting, status, PASSWORD_GUIDANCE))
+            continue
+        if application and setting in _PROVIDER_KEY_BOUNDS:
+            minimum, maximum = _PROVIDER_KEY_BOUNDS[setting]
+            if value is None or value == "":
+                status = "not_configured"
             elif (not isinstance(value, str) or not minimum <= len(value) <= maximum
                   or any(not 33 <= ord(char) <= 126 for char in value)):
                 status = "invalid"
@@ -89,8 +97,6 @@ def check_deployment_setup(environment: Mapping[str, str], *, application=False)
                 status = "format_accepted"
             guidance = (f"{minimum}-{maximum} printable ASCII characters without spaces; "
                         "format only, authentication unverified.")
-            if setting == "DEMO_PASSWORD":
-                guidance += " Use a randomly generated password."
             checks.append(SetupCheck(setting, status, guidance))
             continue
         if _absent(value):

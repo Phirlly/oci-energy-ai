@@ -5,13 +5,15 @@ import asyncio
 from typing import Annotated, Literal
 
 from fastapi import HTTPException, Request
-from pydantic import Field
+from pydantic import ConfigDict, Field
 
 from energy_ai.bills.schema import Facts, StrictModel
+from energy_ai.web.passwords import MAX_PASSWORD_CHARACTERS
 
 
 class Login(StrictModel):
-    code: str = Field(min_length=1, max_length=200)
+    model_config = ConfigDict(str_strip_whitespace=False)
+    code: str = Field(min_length=1, max_length=MAX_PASSWORD_CHARACTERS)
 
 
 class Revision(StrictModel):

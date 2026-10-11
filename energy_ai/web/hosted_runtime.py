@@ -12,6 +12,7 @@ from energy_ai.agents.office_analysis import analyze_office
 from energy_ai.agents.provider_clients import open_model
 from energy_ai.bills.extraction import extract_bill
 from energy_ai.web.hosted_configuration import RuntimeConfigurationError
+from energy_ai.web.passwords import valid_password
 
 
 def _close_identity(signer):
@@ -31,8 +32,10 @@ def _secret(client, secret_id, name):
             or len(content.content) > 32768):
         raise ValueError()
     value = base64.b64decode(content.content, validate=True).decode('utf-8')
-    minimum, maximum = (24, 200) if name == 'demo_password' else (1, 4096)
-    if not minimum <= len(value) <= maximum or any(not 33 <= ord(char) <= 126 for char in value):
+    if name == 'demo_password':
+        if not valid_password(value):
+            raise ValueError()
+    elif not 1 <= len(value) <= 4096 or any(not 33 <= ord(char) <= 126 for char in value):
         raise ValueError()
     return value
 

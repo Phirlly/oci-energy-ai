@@ -68,7 +68,7 @@ class PackagedApplicationTests(unittest.TestCase):
         from energy_ai.bills.pdf import extract_pdf, PdfError
 
         origin, backend = 'https://demo.example', '10.40.1.8:8080'
-        password = 'invented-container-password-123'
+        password = 'admin'
         app = create_app(access_code=password, origin=origin, backend_host=backend,
                          release=EXPECTED_RELEASE)
         with TestClient(app, base_url=origin, headers={'host': backend}) as client:

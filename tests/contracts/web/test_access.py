@@ -1,3 +1,4 @@
+import json
 import unittest
 from fastapi.testclient import TestClient
 
@@ -5,7 +6,7 @@ from energy_ai.web.app import create_app
 
 ORIGIN = "http://127.0.0.1:8765"
 HEADERS = {"origin": ORIGIN, "x-energy-action": "1"}
-CODE = "test-launch-code"
+CODE = "admin"  # Public fixture chosen by the presenter, never an application default.
 
 
 class SessionAccessTests(unittest.TestCase):
@@ -56,13 +57,55 @@ class SessionAccessTests(unittest.TestCase):
     def test_error_does_not_echo_submitted_private_data(self):
         self.login()
         response = self.client.post("/api/session", content='{"code": "PRIVATE", "extra": 2}', headers=HEADERS)
+        self.assertEqual(response.status_code, 422)
         self.assertNotIn("PRIVATE", response.text)
+
+
+class PresenterPasswordTests(unittest.TestCase):
+    def test_local_and_hosted_login_preserve_each_operator_chosen_password(self):
+        choices = [('admin', '<admin>'), ('admin', ' admin '), ('!', '?'),
+                   (' énergie solaire ☀ ', 'énergie solaire ☀'),
+                   ('café', 'cafe\u0301'), ('é' * 200, 'é' * 199)]
+        for hosted in (False, True):
+            origin = 'https://demo.example' if hosted else ORIGIN
+            options = dict(backend_host='10.40.1.8:8080', release='a' * 40) if hosted else {}
+            headers = {'origin': origin, 'x-energy-action': '1'}
+            transport = {'host': options['backend_host']} if hosted else {}
+            for password, mismatch in choices:
+                with self.subTest(hosted=hosted, password=password):
+                    app = create_app(access_code=password, origin=origin, **options)
+                    with TestClient(app, base_url=origin, headers=transport) as client:
+                        wrong = client.post('/api/session', json={'code': mismatch}, headers=headers)
+                        self.assertEqual(wrong.status_code, 401)
+                        self.assertEqual(client.get('/api/session').status_code, 401)
+                        response = client.post('/api/session', json={'code': password}, headers=headers)
+                        self.assertEqual(response.status_code, 200)
+                        self.assertEqual(client.get('/api/session').status_code, 200)
+
+    def test_configuration_rejects_blank_nonprintable_and_oversized_passwords(self):
+        for value in ('', '   ', 'private\nmarker', 'private\tmarker', 'private\x00marker',
+                      'private\ud800marker', 'é' * 201, None, True):
+            with self.subTest(value=value):
+                with self.assertRaises(ValueError) as error:
+                    create_app(access_code=value, origin=ORIGIN)
+                self.assertNotIn('private', str(error.exception))
+
+    def test_malformed_login_fails_safely_without_echoing_the_password(self):
+        app = create_app(access_code=CODE, origin=ORIGIN)
+        with TestClient(app, base_url=ORIGIN) as client:
+            for value, status in (('private\nmarker', 401), ('private\x00marker', 401),
+                                  ('private\ud800marker', 422), ('é' * 201, 422), ('', 422)):
+                with self.subTest(value=value):
+                    response = client.post('/api/session', content=json.dumps({'code': value}), headers=HEADERS)
+                    self.assertEqual(response.status_code, status)
+                    self.assertNotIn('private', response.text)
+                    self.assertEqual(client.get('/api/session').status_code, 401)
 
 
 class HostedAccessTests(unittest.TestCase):
     def test_https_login_secure_cookie_health_and_forwarded_header_boundaries(self):
         origin, backend, release = 'https://demo.example', '10.40.1.8:8080', 'a' * 40
-        password = 'public-fixture-password-123'
+        password = 'admin'
         app = create_app(access_code=password, origin=origin, backend_host=backend, release=release)
         with TestClient(app, base_url=origin, headers={'host': backend}) as client:
             health = client.get('/healthz')
@@ -87,6 +130,6 @@ class HostedAccessTests(unittest.TestCase):
         for changed in ({'origin': 'http://demo.example'}, {'origin': 'https://demo.example/'},
                         {'origin': 'https://user@demo.example'}, {'origin': 'https://demo.example:443'},
                         {'backend_host': '203.0.113.1:8080'}, {'backend_host': '10.40.1.8:80'},
-                        {'release': '../private'}, {'access_code': CODE}, {'release': None}):
+                        {'release': '../private'}, {'access_code': '   '}, {'release': None}):
             with self.subTest(changed=changed), self.assertRaises(ValueError):
                 create_app(**(valid | changed))

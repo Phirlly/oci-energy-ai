@@ -83,7 +83,7 @@ class VaultRuntimeTests(unittest.TestCase):
 
     def test_rejects_wrong_identity_stage_encoding_password_and_metadata_region(self):
         variants = [bundle(secret_id=SECRET[:-1] + 'z'), bundle(stages=['PREVIOUS']),
-                    bundle(value='short'), bundle(value=' ' + PASSWORD),
+                    bundle(value='   '), bundle(value=PASSWORD + '\n'),
                     bundle(secret_bundle_content=Base64SecretBundleContentDetails(content='not-base64')),
                     bundle(secret_bundle_content=Base64SecretBundleContentDetails(content='/w=='))]
         for response in variants:
@@ -97,11 +97,13 @@ class VaultRuntimeTests(unittest.TestCase):
         self.client_factory.assert_not_called()
 
     def test_application_preflight_matches_actual_vault_password_and_key_bounds(self):
-        cases = [('demo_password', 'DEMO_PASSWORD', '!' * 24, True),
-                 ('demo_password', 'DEMO_PASSWORD', '~' * 200, True),
-                 ('demo_password', 'DEMO_PASSWORD', 'x' * 23, False),
+        cases = [('demo_password', 'DEMO_PASSWORD', 'admin', True),
+                 ('demo_password', 'DEMO_PASSWORD', '!', True),
+                 ('demo_password', 'DEMO_PASSWORD', 'é' * 200, True),
+                 ('demo_password', 'DEMO_PASSWORD', ' énergie solaire ☀ ', True),
                  ('demo_password', 'DEMO_PASSWORD', 'x' * 201, False),
-                 ('demo_password', 'DEMO_PASSWORD', 'x' * 24 + ' ', False),
+                 ('demo_password', 'DEMO_PASSWORD', '   ', False),
+                 ('demo_password', 'DEMO_PASSWORD', 'admin\n', False),
                  ('openai', 'OPENAI_API_KEY', '!', True),
                  ('openai', 'OPENAI_API_KEY', '~' * 4096, True),
                  ('openai', 'OPENAI_API_KEY', 'x' * 4097, False),

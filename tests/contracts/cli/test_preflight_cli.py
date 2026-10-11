@@ -64,7 +64,8 @@ class DeploymentSetupCommandTests(unittest.TestCase):
         missing = self.run_cli(environment, "--application")
         self.assertEqual(missing.returncode, 2)
         self.assertIn("DEMO_PASSWORD | missing", missing.stdout)
-        for password, status in (("fixture-password-12345678", 0), ("private-short-marker", 2)):
+        for password, status in (("admin", 0), (" énergie solaire ", 0),
+                                 ("private-marker\n", 2), ("x" * 201, 2)):
             with self.subTest(expected_exit=status):
                 result = self.run_cli(environment | {"DEMO_PASSWORD": password}, "--application")
                 self.assertEqual(result.returncode, status, result.stderr)
