@@ -101,3 +101,35 @@ jobs:
         working-directory: frontend
       - run: npm test
         working-directory: frontend
+
+  container:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Build immutable Linux image
+        run: docker buildx build --load --platform linux/amd64 --build-arg RELEASE="$GITHUB_SHA" --tag oci-energy-ai:check .
+      - name: Check restricted runtime and public sample
+        run: |
+          docker run --rm --pull=never --network=none --read-only --cap-drop=ALL \
+            --security-opt=no-new-privileges --pids-limit=128 --memory=2g --cpus=2 \
+            --tmpfs /tmp:rw,noexec,nosuid,size=64m \
+            --tmpfs /data:rw,noexec,nosuid,size=64m,mode=1777 \
+            --mount "type=bind,source=$PWD/tests,target=/checks/tests,readonly" \
+            --mount "type=bind,source=$PWD/deployment,target=/checks/deployment,readonly" \
+            --entrypoint /app/.venv/bin/python oci-energy-ai:check \
+            -B /checks/tests/container/check_runtime.py "$GITHUB_SHA" x86_64
+      - name: Save image for archive scanning
+        run: |
+          mkdir -p dist/container
+          docker image save --output dist/container/image.tar oci-energy-ai:check
+      - name: Scan image vulnerabilities
+        run: |
+          docker run --rm --read-only --cap-drop=ALL --security-opt=no-new-privileges \
+            --pids-limit=128 --memory=4g --tmpfs /tmp:rw,nosuid,size=3g \
+            --mount "type=bind,source=$PWD/dist/container,target=/artifacts,readonly" \
+            aquasec/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa \
+            image --input /artifacts/image.tar --cache-dir /tmp/trivy --scanners vuln \
+            --severity HIGH,CRITICAL --exit-code 1 --exit-on-eol 1 --timeout 10m --disable-telemetry

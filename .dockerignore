@@ -1,0 +1,22 @@
+# Only public runtime sources and locked build inputs enter the build context.
+**
+!Dockerfile
+!pyproject.toml
+!uv.lock
+!energy_ai/*.py
+!energy_ai/agents/*.py
+!energy_ai/bills/*.py
+!energy_ai/office/*.py
+!energy_ai/web/*.py
+!frontend/package.json
+!frontend/package-lock.json
+!frontend/index.html
+!frontend/src/*.js
+!frontend/src/*.jsx
+!frontend/src/*.css
+!examples/monthly-office/README.md
+!examples/monthly-office/intervals.csv
+!examples/monthly-office/tariff.json
+!examples/monthly-office/metadata.json
+!examples/monthly-office/expected-bill.json
+**/.*
