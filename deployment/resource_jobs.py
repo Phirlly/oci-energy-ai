@@ -7,7 +7,9 @@ import re
 from oci.exceptions import ServiceError
 from oci.resource_manager import models
 
+from deployment.application_configuration import regional_identifier
 from deployment.configuration import DeploymentError
+from energy_ai.web.origin import OriginPolicy
 
 
 def resource_id(value, kind):
@@ -101,21 +103,23 @@ class ResourceJobs:
                 raise DeploymentError("Resource Manager job did not succeed; inspect the reported job.")
             self.deadline.pause()
 
-    def apply(self, stack_id, deployment_id):
+    def apply(self, stack_id, deployment_id, *, application_region=None):
         plan_id = self.run(stack_id, models.CreatePlanJobOperationDetails(is_provider_upgrade_required=False))
         apply_id = self.run(stack_id, models.CreateApplyJobOperationDetails(
             execution_plan_strategy="FROM_PLAN_JOB_ID", execution_plan_job_id=plan_id,
             is_provider_upgrade_required=False,
         ))
-        return self.outputs(apply_id, deployment_id)
+        return self.outputs(apply_id, deployment_id, application_region=application_region)
 
     def destroy(self, stack_id):
         self.run(stack_id, models.CreateDestroyJobOperationDetails(
             execution_plan_strategy="AUTO_APPROVED", is_provider_upgrade_required=False,
         ))
 
-    def outputs(self, job_id, deployment_id):
+    def outputs(self, job_id, deployment_id, *, application_region=None):
         expected = {"artifact_bucket_name", "object_storage_namespace", "generative_ai_project_ocid"}
+        if application_region is not None:
+            expected |= {"instance_ocid", "application_origin", "backend_host", "vault_ocid", "key_ocid"}
         result = {}
         for item in self.deadline.pages(self.client.list_job_outputs, job_id, collection=True):
             name = item.output_name
@@ -141,4 +145,16 @@ class ResourceJobs:
             result[name] = value
         if set(result) != expected:
             raise DeploymentError("Resource Manager did not return all required outputs.")
+        if application_region is not None:
+            kinds = {"instance_ocid": "instance", "vault_ocid": "vault", "key_ocid": "key",
+                     "generative_ai_project_ocid": "generativeaiproject"}
+            if not all(regional_identifier(result[name], kind, application_region) for name, kind in kinds.items()):
+                raise DeploymentError("Application output identifiers do not match the deployment region.")
+            try:
+                OriginPolicy.validate(result["application_origin"], result["backend_host"])
+                suffix = re.escape(f".apigateway.{application_region}.oci.customer-oci.com")
+                if not re.fullmatch(r"https://[a-z0-9-]+" + suffix, result["application_origin"]):
+                    raise ValueError()
+            except ValueError:
+                raise DeploymentError("Application gateway or backend output is invalid.") from None
         return result

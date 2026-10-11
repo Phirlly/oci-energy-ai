@@ -15,6 +15,19 @@ STACK_ID = "ocid1.ormstack.oc1.us-ashburn-1." + "b" * 32
 PROJECT_ID = "ocid1.generativeaiproject.oc1.us-ashburn-1." + "c" * 32
 PLAN_ID = "ocid1.ormjob.oc1.us-ashburn-1." + "d" * 32
 APPLY_ID = "ocid1.ormjob.oc1.us-ashburn-1." + "e" * 32
+APPLICATION_OUTPUTS = {
+    "instance_ocid": "ocid1.instance.oc1.iad." + "a" * 32,
+    "vault_ocid": "ocid1.vault.oc1.iad." + "b" * 32,
+    "key_ocid": "ocid1.key.oc1.iad." + "c" * 32,
+    "application_origin": "https://example.apigateway.us-ashburn-1.oci.customer-oci.com",
+    "backend_host": "10.40.1.10:8080",
+}
+
+
+def application_outputs():
+    return [models.JobOutputSummary(output_name=name, output_value=value,
+                                   output_type="string", is_sensitive=False)
+            for name, value in APPLICATION_OUTPUTS.items()]
 
 
 def response(data, **headers):

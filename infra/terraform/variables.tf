@@ -27,3 +27,25 @@ variable "compartment_ocid" {
     error_message = "compartment_ocid must identify an OC1 compartment."
   }
 }
+
+variable "application" {
+  description = "Pinned nonsecret host topology; null retains foundation-only operation. Managed by the deployment workflow."
+  type = object({
+    version             = number
+    tenancy_ocid        = string
+    home_region         = string
+    availability_domain = string
+    image_ocid          = string
+  })
+  default = null
+  validation {
+    condition = var.application == null ? true : (
+      var.application.version == 1 &&
+      can(regex("^ocid1\\.tenancy\\.oc1\\.\\.[a-z0-9]{20,255}$", var.application.tenancy_ocid)) &&
+      can(regex("^[a-z]{2,3}-[a-z][a-z0-9-]{1,30}-[1-9][0-9]?$", var.application.home_region)) &&
+      can(regex("^[A-Za-z0-9:_-]{1,128}$", var.application.availability_domain)) &&
+      can(regex("^ocid1\\.image\\.oc1\\.[a-z0-9-]+\\.[a-z0-9.]{20,255}$", var.application.image_ocid))
+    )
+    error_message = "application must contain valid version-1 OC1 hosting topology."
+  }
+}

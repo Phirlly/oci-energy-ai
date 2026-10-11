@@ -1,0 +1,86 @@
+name: Deploy OCI demo
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Apply or update, roll back, verify the public journey, or destroy
+        type: choice
+        options: [apply, rollback, verify, destroy]
+        default: apply
+        required: true
+      confirmation:
+        description: For destroy, enter the exact DEPLOYMENT_ID
+        type: string
+        required: false
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: oci-energy-ai-foundation
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: inputs.operation == 'apply' && (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main')
+    uses: ./.github/workflows/validate.yml
+    with:
+      export_runtime: true
+
+  deploy:
+    needs: validate
+    if: >-
+      always() && !cancelled() &&
+      (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main') &&
+      (needs.validate.result == 'success' ||
+       (inputs.operation != 'apply' && needs.validate.result == 'skipped'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    environment:
+      name: demo
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: '0.12.19'
+          enable-cache: false
+      - run: uv sync --locked --no-dev
+      - run: uv pip check --python .venv/bin/python
+      - name: Retrieve this run's checked image
+        if: inputs.operation == 'apply'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUNTIME_ARTIFACT: ${{ needs.validate.outputs.artifact_name }}
+          RUNTIME_ARTIFACT_ID: ${{ needs.validate.outputs.artifact_id }}
+        run: |
+          test -n "$RUNTIME_ARTIFACT"
+          test -n "$RUNTIME_ARTIFACT_ID"
+          gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "$RUNTIME_ARTIFACT" --dir dist/runtime
+      - name: Run verified OCI demo operation
+        env:
+          DEPLOYMENT_ID: ${{ vars.DEPLOYMENT_ID }}
+          OCI_REGION: ${{ vars.OCI_REGION }}
+          OCI_COMPARTMENT_OCID: ${{ vars.OCI_COMPARTMENT_OCID }}
+          OCI_TENANCY_OCID: ${{ vars.OCI_TENANCY_OCID }}
+          OCI_USER_OCID: ${{ vars.OCI_USER_OCID }}
+          OCI_FINGERPRINT: ${{ vars.OCI_FINGERPRINT }}
+          OCI_PRIVATE_KEY: ${{ secrets.OCI_PRIVATE_KEY }}
+          OCI_PRIVATE_KEY_PASSPHRASE: ${{ secrets.OCI_PRIVATE_KEY_PASSPHRASE }}
+          OCI_AVAILABILITY_DOMAIN: ${{ vars.OCI_AVAILABILITY_DOMAIN }}
+          OCI_IMAGE_OCID: ${{ vars.OCI_IMAGE_OCID }}
+          DEMO_PASSWORD: ${{ secrets.DEMO_PASSWORD }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OCI_MODEL: ${{ vars.OCI_MODEL }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+          ANTHROPIC_MODEL: ${{ vars.ANTHROPIC_MODEL }}
+          DEMO_OPERATION: ${{ inputs.operation }}
+          DESTROY_CONFIRMATION: ${{ inputs.confirmation }}
+        run: uv run --no-sync python -m deployment.application "$DEMO_OPERATION" --confirm "$DESTROY_CONFIRMATION"

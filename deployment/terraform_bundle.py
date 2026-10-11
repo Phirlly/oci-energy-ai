@@ -9,8 +9,12 @@ from zipfile import ZIP_STORED, ZipFile, ZipInfo
 
 
 _MEMBERS = (
-    ".terraform.lock.hcl", "locals.tf", "outputs.tf", "project.tf",
-    "providers.tf", "storage.tf", "variables.tf", "versions.tf",
+    ".terraform.lock.hcl", "compute.tf", "gateway.tf", "locals.tf", "network.tf", "network_access.tf",
+    "outputs.tf", "project.tf", "providers.tf", "runtime_identity.tf", "storage.tf", "variables.tf",
+    "vault.tf", "versions.tf",
+    "host/__init__.py", "host/activation.py", "host/artifacts.py", "host/bootstrap.sh", "host/contracts.py",
+    "host/control.py", "host/entrypoint.py", "host/oci-energy-ai.service", "host/process.py",
+    "host/service.py", "host/service_entry.py", "host/state.py",
 )
 _MAX_MEMBER_BYTES = 1024 * 1024
 

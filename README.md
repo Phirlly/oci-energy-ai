@@ -1,9 +1,11 @@
 # OCI Energy AI
 
 An OCI demo for reviewing electricity bills and exploring battery scenarios.
-The **local browser app** connects a prepared office month, battery scenarios,
-two tool-using analysts and personal bill review. Terraform foundation and hosted model checks
-are available; the public OCI application deployment is still being built.
+The browser connects a prepared office month, battery scenarios, two tool-using
+analysts and personal bill review. Python/FastAPI and React run on OCI; the OpenAI
+Agents SDK orchestrates OCI, OpenAI and Anthropic model adapters.
+**Status:** local journeys and provider checks are verified. The new automated
+OCI hosting workflow is awaiting its first live validation.
 
 ## Try the demo
 
@@ -52,14 +54,14 @@ calculation. GitHub secrets are used by hosted checks, not downloaded to this ap
 Extraction allows one correction attempt, with at most two model invocations
 inside a shared 100-second deadline; unresolved facts still need manual review.
 
-This presenter binds to `127.0.0.1` with one worker and 30-minute sessions.
+The local presenter binds to `127.0.0.1` with one worker and 30-minute sessions.
 Private bills stay in memory and clear on sign-out, expiry or restart; PDF bytes
 are discarded after parsing. Public office history is shared across presenters
 and stored in `runtime/office.sqlite3`, limited to 100 runs and 7 days. One office
-analysis runs at a time, with a 180-second deadline and cancellation. Do not expose it publicly.
+analysis runs at a time, with a 180-second deadline and cancellation.
 Linux parsing has a hard address-space limit; macOS uses a soft RSS watchdog
-that needs process-inspection permission. Public HTTPS hosting, Vault delivery
-are pending.
+that needs process-inspection permission. Use the deployment workflow below for
+public HTTPS hosting.
 
 ## Explore the office battery example
 
@@ -105,36 +107,46 @@ of uploaded-bill analysis.
 | `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` | Secrets | Optional external providers |
 | `DEMO_PASSWORD` | Secret | Your chosen browser password or passphrase; nonblank, up to 200 printable characters, including spaces and Unicode |
 
-3. Run **Check deployment setup** on `dev` or validated `main`. This checks presence
-   and formats, including the browser password, without displaying secrets. It does
-   not authenticate credentials or check live permissions. Custom GitHub App deployment protection
-   rules are incompatible with this check.
-4. After **Validate** passes, run **Bootstrap OCI foundation → apply** on the same
-   commit. Terraform runs through OCI Resource Manager and creates the owned
-   private bucket and GenAI project. It does not launch the application.
-5. Run **Verify model tool calls → configured**. It checks real calculation-tool
-   execution, the two-analyst office workflow and extraction of invented public bills through OCI and
-   configured external providers. Configured failures fail the run; missing
-   optional keys are explicitly skipped. No personal bills are submitted.
+3. Run **Check deployment setup** on `dev` or validated `main`. This checks formats
+   without displaying secrets; live permissions are checked during deployment.
+4. Run **Deploy OCI demo → apply**. It runs validation, builds and scans a Linux
+   image, applies Terraform through OCI Resource Manager, delivers credentials to
+   Vault, and verifies HTTPS login and the prepared scenario. Open the reported
+   URL and enter your `DEMO_PASSWORD`. No local API-key files are needed.
+5. Run **Deploy OCI demo → verify** to check public PDF upload/review and real
+   office tools and bill extraction through every configured provider.
 
-The deployment identity needs
-[Resource Manager permissions](https://docs.oracle.com/en-us/iaas/Content/Identity/Reference/resourcemanagerpolicyreference.htm),
-bucket management and
-[GenAI project permissions](https://docs.oracle.com/en-us/iaas/Content/generative-ai/project-permissions.htm).
-Model checks also need
-[OCI Responses access](https://docs.oracle.com/en-us/iaas/Content/generative-ai/get-started-agents.htm)
-and incur provider charges. Defaults: OCI `google.gemini-2.5-flash` (externally
-hosted through OCI in Ashburn), OpenAI `gpt-4.1-mini-2025-04-14`, Anthropic
-`claude-haiku-5-5`. Optional GitHub variables `OCI_MODEL`, `OPENAI_MODEL` and
-`ANTHROPIC_MODEL` select alternatives, which need their own successful check.
-There is no automatic fallback. Raw model responses and traces are not published.
+Hosting creates a private Oracle Linux 9 VM (1 OCPU, 8 GB RAM, 50 GB boot disk),
+network/NAT, public HTTPS API Gateway, private artifact bucket, GenAI project,
+dedicated Vault/key and instance identity. These resources and model requests
+incur OCI/provider charges. The deployment identity needs management permissions
+for these resources and Resource Manager in the target compartment, plus
+permission to create the dynamic group and its policy in the tenancy home region.
+Runtime credentials stay out of Terraform state and image artifacts.
 
-Keep one owning repository per deployment ID and its region/compartment fixed.
-On timeout, inspect the logged Resource Manager job; it may still be running.
-Wait before rerunning. To remove resources, run **Bootstrap OCI foundation →
-destroy** and confirm the exact deployment ID. This retains the empty stack and
-never purges bucket contents; a nonempty bucket blocks cleanup. Application
-deployment, update and rollback remain pending.
+The first apply selects and pins a compatible platform image and availability
+domain. Optional variables `OCI_IMAGE_OCID` and `OCI_AVAILABILITY_DOMAIN` select
+them explicitly. Keep one owning repository per deployment ID and keep its
+region/compartment fixed; use a dedicated demo Vault without unrelated resources.
+
+Defaults: OCI `google.gemini-2.5-flash` (through OCI in Ashburn), OpenAI
+`gpt-4.1-mini-2025-04-14`, Anthropic `claude-haiku-5-5`. Optional variables
+`OCI_MODEL`, `OPENAI_MODEL`, `ANTHROPIC_MODEL` select alternatives. Missing external
+keys give an OCI-only deployment; configured providers must pass verification.
+
+Use **apply** again to update code, models or credentials. **rollback** activates
+the previous compatible release using current Vault credentials. Public office
+history survives application updates and VM restarts; private bill sessions end
+on restart. Host-helper changes require **destroy** then **apply**. To change the
+pinned image or availability domain, destroy the old deployment, choose a new
+`DEPLOYMENT_ID`, and apply; the old empty stack retains its original topology.
+
+Use **destroy**, confirming the exact deployment ID, to stop the VM and remove
+the demo. This deletes public history and owned artifacts, schedules credentials
+for deletion, and retains the empty Resource Manager stack. Vault/key deletion
+follows OCI waiting periods. Unknown bucket objects or Vault children block
+cleanup. On timeout, inspect the reported jobs before retrying; cancellation
+alone does not establish that a remote operation stopped.
 
 ## Validation and private data
 

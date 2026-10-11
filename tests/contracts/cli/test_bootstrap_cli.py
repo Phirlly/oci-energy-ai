@@ -8,6 +8,7 @@ from zipfile import ZipFile
 
 from deployment.bootstrap import main
 from tests.fixtures.deployment_environment import configured_environment
+from tests.fixtures.terraform_source import EXPECTED_MEMBERS
 
 
 ENVIRONMENT = configured_environment() | {
@@ -38,8 +39,7 @@ class BootstrapCommandTests(unittest.TestCase):
         self.assertEqual(status, 0, error)
         archive = manager.return_value.apply.call_args.args[0]
         with ZipFile(BytesIO(archive)) as bundle:
-            self.assertEqual(len(bundle.namelist()), 8)
-            self.assertIn("project.tf", bundle.namelist())
+            self.assertEqual(bundle.namelist(), list(EXPECTED_MEMBERS))
         self.assertIn("Foundation apply succeeded", output)
         self.assertNotIn(ENVIRONMENT["OCI_PRIVATE_KEY"], output + error)
 

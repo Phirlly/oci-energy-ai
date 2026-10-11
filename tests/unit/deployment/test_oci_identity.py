@@ -7,7 +7,7 @@ from oci.response import Response
 from oci.retry import NoneRetryStrategy
 
 from deployment.configuration import DeploymentConfiguration, DeploymentError
-from deployment.oci_identity import resource_manager_client
+from deployment.oci_identity import resource_manager_client, DeliveryClients
 from deployment.resource_manager import ResourceManager
 from tests.fixtures.deployment_environment import configured_environment
 
@@ -61,3 +61,21 @@ class DeploymentIdentityTests(unittest.TestCase):
         with self.assertRaisesRegex(DeploymentError, "signing key") as raised:
             resource_manager_client(configured_environment())
         self.assertNotIn("fake-private-key", str(raised.exception))
+
+    @patch('deployment.oci_identity.deployment_identity')
+    def test_delivery_clients_close_every_session_including_per_vault_clients(self, identity):
+        from unittest.mock import Mock
+        identity.return_value = ({'region': 'us-ashburn-1'}, object())
+        constructors = {name: Mock() for name in DeliveryClients.SERVICES}
+        key_factory = Mock()
+        with patch.dict(DeliveryClients.SERVICES, constructors), patch('deployment.oci_identity.KmsManagementClient', key_factory):
+            with self.assertRaisesRegex(RuntimeError, 'fixture'):
+                with DeliveryClients(configured_environment()) as clients:
+                    self.assertIs(clients.keys('https://fixture.oraclecloud.com'), key_factory.return_value)
+                    self.assertIs(clients.keys('https://fixture.oraclecloud.com'), key_factory.return_value)
+                    raise RuntimeError('fixture')
+        key_factory.assert_called_once()
+        for constructor in [*constructors.values(), key_factory]:
+            self.assertEqual(constructor.call_args.kwargs['timeout'], (10, 30))
+            self.assertIsInstance(constructor.call_args.kwargs['retry_strategy'], NoneRetryStrategy)
+            constructor.return_value.base_client.session.close.assert_called_once()

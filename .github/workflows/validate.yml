@@ -1,6 +1,18 @@
 name: Validate
 
 on:
+  workflow_call:
+    inputs:
+      export_runtime:
+        type: boolean
+        default: false
+    outputs:
+      artifact_name:
+        description: Exact producer artifact name, preserved on deployment-only retries
+        value: ${{ jobs.container.outputs.artifact_name }}
+      artifact_id:
+        description: Immutable checked runtime artifact ID
+        value: ${{ jobs.container.outputs.artifact_id }}
   push:
     branches: [dev, main]
   pull_request:
@@ -10,6 +22,19 @@ permissions:
   contents: read
 
 jobs:
+  host-runtime:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: '3.9'
+      - run: python -B -m unittest discover -s tests/unit/deployment/host -t . -v
+      - run: bash -n infra/terraform/host/bootstrap.sh
+
   python:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -105,6 +130,9 @@ jobs:
   container:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    outputs:
+      artifact_name: ${{ steps.runtime_name.outputs.name }}
+      artifact_id: ${{ steps.runtime_upload.outputs.artifact-id }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -134,3 +162,21 @@ jobs:
             aquasec/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa \
             image --input /artifacts/image.tar --cache-dir /tmp/trivy --scanners vuln \
             --severity HIGH,CRITICAL --exit-code 1 --exit-on-eol 1 --timeout 10m --disable-telemetry
+      - name: Identify the checked runtime archive
+        if: inputs.export_runtime
+        id: runtime_name
+        run: |
+          docker image inspect --format '{{.Id}}' oci-energy-ai:check > dist/container/image-id.txt
+          echo "name=runtime-${GITHUB_SHA}-attempt-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
+      - name: Export checked runtime
+        if: inputs.export_runtime
+        id: runtime_upload
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ steps.runtime_name.outputs.name }}
+          path: |
+            dist/container/image.tar
+            dist/container/image-id.txt
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7

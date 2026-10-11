@@ -1,0 +1,25 @@
+[Unit]
+Description=OCI Energy AI private application
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=|/var/lib/oci-energy-ai/state.json
+ConditionPathExists=|/run/oci-energy-ai/candidate
+StartLimitIntervalSec=120
+StartLimitBurst=5
+
+[Service]
+Type=notify
+NotifyAccess=all
+Delegate=yes
+KillMode=mixed
+Environment=PODMAN_SYSTEMD_UNIT=oci-energy-ai.service
+ExecStart=/usr/bin/python3 -EsB /opt/oci-energy-ai/host/service_entry.py
+ExecStop=/usr/bin/podman stop --ignore --time 20 oci-energy-ai
+ExecStopPost=/usr/bin/podman rm --force --ignore oci-energy-ai
+TimeoutStartSec=120
+TimeoutStopSec=40
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

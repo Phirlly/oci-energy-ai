@@ -1,8 +1,19 @@
 """Construct the GitHub deployment identity without credential files or profiles."""
 
+from contextlib import ExitStack
+
+from oci.apigateway import GatewayClient
+from oci.compute_instance_agent import ComputeInstanceAgentClient
+from oci.core import ComputeClient, VirtualNetworkClient
+from oci.generative_ai import GenerativeAiClient
+from oci.identity import IdentityClient
+from oci.key_management import KmsManagementClient, KmsVaultClient
+from oci.object_storage import ObjectStorageClient
 from oci.resource_manager import ResourceManagerClient
 from oci.retry import NoneRetryStrategy
+from oci.secrets import SecretsClient
 from oci.signer import Signer
+from oci.vault import VaultsClient
 
 from deployment.configuration import DeploymentError
 from deployment.preflight import check_deployment_setup
@@ -32,3 +43,39 @@ def resource_manager_client(environment):
         config, signer=signer,
         timeout=(10, 30), retry_strategy=NoneRetryStrategy(),
     )
+
+
+class DeliveryClients:
+    """One operation owns and closes all deployment SDK transport sessions."""
+
+    SERVICES = dict(resource=ResourceManagerClient, identity=IdentityClient, compute=ComputeClient,
+                    network=VirtualNetworkClient, kms=KmsVaultClient, vaults=VaultsClient,
+                    secrets=SecretsClient, storage=ObjectStorageClient, agent=ComputeInstanceAgentClient,
+                    genai=GenerativeAiClient, gateway=GatewayClient)
+
+    def __init__(self, environment):
+        self.config, signer = deployment_identity(environment)
+        self.options = dict(signer=signer, timeout=(10, 30), retry_strategy=NoneRetryStrategy())
+        self.cleanup, self.key_clients = ExitStack(), {}
+
+    def _client(self, factory, **options):
+        client = factory(self.config, **self.options, **options)
+        self.cleanup.callback(client.base_client.session.close)
+        return client
+
+    def __enter__(self):
+        try:
+            for name, factory in self.SERVICES.items():
+                setattr(self, name, self._client(factory))
+            return self
+        except Exception:
+            self.cleanup.close()
+            raise
+
+    def keys(self, endpoint):
+        if endpoint not in self.key_clients:
+            self.key_clients[endpoint] = self._client(KmsManagementClient, service_endpoint=endpoint)
+        return self.key_clients[endpoint]
+
+    def __exit__(self, *args):
+        return self.cleanup.__exit__(*args)

@@ -5,7 +5,8 @@ from oci.resource_manager import models
 from deployment.configuration import DeploymentError
 from deployment.resource_manager import ResourceManager
 from tests.fixtures.resource_manager import (
-    APPLY_ID, CONFIG, PLAN_ID, PROJECT_ID, REPOSITORY, STACK_ID, Clock, client, response, stack,
+    APPLICATION_OUTPUTS, APPLY_ID, CONFIG, PLAN_ID, PROJECT_ID, REPOSITORY, STACK_ID,
+    Clock, application_outputs, client, response, stack,
 )
 
 
@@ -114,3 +115,53 @@ class ResourceOutputTests(unittest.TestCase):
                 with self.assertRaises(DeploymentError) as raised:
                     self.manager.apply(b"archive")
                 self.assertNotIn("private-marker", str(raised.exception))
+
+
+class ApplicationOutputTests(unittest.TestCase):
+    def setUp(self):
+        self.client = client()
+        self.manager = ResourceManager(self.client, CONFIG, REPOSITORY, "123-1")
+        self.values = APPLICATION_OUTPUTS
+        self.outputs = self.client.list_job_outputs.return_value.data.items
+        self.outputs.extend(application_outputs())
+
+    def read(self):
+        return self.manager.jobs.outputs(APPLY_ID, CONFIG.deployment_id, application_region=CONFIG.region)
+
+    def test_complete_outputs_are_allowlisted_and_foundation_reads_stay_compatible(self):
+        self.outputs.append(models.JobOutputSummary(output_name="private", output_value="private-marker"))
+        result = self.read()
+        self.assertEqual(len(result), 8)
+        self.assertEqual({key: result[key] for key in self.values}, self.values)
+        self.assertNotIn("private-marker", repr(result))
+        self.assertEqual(len(self.manager.jobs.outputs(APPLY_ID, CONFIG.deployment_id)), 3)
+
+    def test_wrong_region_origin_backend_and_incomplete_outputs_fail_closed(self):
+        cases = {
+            "instance_ocid": "ocid1.instance.oc1.phx." + "a" * 32,
+            "key_ocid": "ocid1.vault.oc1.iad." + "a" * 32,
+            "application_origin": "https://example.apigateway.us-phoenix-1.oci.customer-oci.com",
+            "backend_host": "8.8.8.8:8080",
+        }
+        for name, value in cases.items():
+            item = next(item for item in self.outputs if item.output_name == name)
+            original = item.output_value
+            item.output_value = value
+            with self.subTest(name=name), self.assertRaises(DeploymentError):
+                self.read()
+            item.output_value = original
+        self.outputs.pop()
+        with self.assertRaises(DeploymentError):
+            self.read()
+
+    def test_sensitive_duplicate_and_nonstring_application_outputs_are_rejected(self):
+        item = self.outputs[-1]
+        for field, value in (("is_sensitive", True), ("output_type", "number"), ("output_value", 8080)):
+            original = getattr(item, field)
+            setattr(item, field, value)
+            with self.subTest(field=field), self.assertRaises(DeploymentError):
+                self.read()
+            setattr(item, field, original)
+        self.outputs.append(item)
+        with self.assertRaises(DeploymentError):
+            self.read()
