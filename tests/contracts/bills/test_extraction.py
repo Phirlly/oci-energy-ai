@@ -19,7 +19,9 @@ class BillAgentContractTests(unittest.IsolatedAsyncioTestCase):
         for rule in ("supplier.value", "complete issuing utility or organization name as printed",
                      "Exclude surrounding statement headings, labels and notices",
                      "preserve punctuation and legal suffixes", "supplier.evidence.quote",
-                     "may include that surrounding header text"):
+                     "may include that surrounding header text", "Extract clearly stated facts",
+                     "sample, fictional or illustrative", "null only when a fact is absent or unclear",
+                     "Do not require external confirmation"):
             self.assertIn(rule, direct_rules)
         schema = json.loads(schema_text)
         supplier = schema["properties"]["supplier"]

@@ -17,6 +17,9 @@ Include every schema field. Missing scalar facts are null; missing charges are [
 Every present scalar is {"value": the typed fact, "evidence": {"page": 1, "quote": "exact source text"}}.
 Each charges entry has the same value/evidence pair; its value has label, amount and role.
 Do not use separate facts or evidence maps. Do not guess missing facts.
+Extract clearly stated facts even when the document labels itself sample,
+fictional or illustrative. Use null only when a fact is absent or unclear in the
+supplied pages. Do not require external confirmation that the named issuer exists.
 supplier.value contains only the complete issuing utility or organization name
 as printed. Exclude surrounding statement headings, labels and notices; preserve
 punctuation and legal suffixes belonging to the name. supplier.evidence.quote may
