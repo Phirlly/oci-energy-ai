@@ -73,8 +73,11 @@ class BillAgentContractTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(reason=reason), self.assertRaises(ExtractionError) as caught:
                 await extract_bill(ScriptedModel([[message(value)], [message(value)]]), [TEXT])
             self.assertEqual(caught.exception.category, "schema")
+            issue = dict(field="document", reason=reason)
+            if reason == "type":
+                issue["value_kind"] = "string"
             self.assertEqual(caught.exception.diagnostics,
-                             dict(issues=[dict(field="document", reason=reason)], truncated=False))
+                             dict(issues=[issue], truncated=False))
             self.assertNotIn("private-marker", str(caught.exception))
 
     async def test_evidence_diagnostics_contain_only_known_fields_and_counts(self):
@@ -162,9 +165,40 @@ class BillSchemaFeedbackTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(field=field, reason=reason), self.assertRaises(ExtractionError) as caught:
                 await extract_bill(model, [TEXT])
             self.assertEqual(caught.exception.category, "schema")
+            issue = dict(field=location, reason=reason)
+            if reason == "type":
+                issue["value_kind"] = "boolean"
             self.assertEqual(caught.exception.diagnostics,
-                             dict(issues=[dict(field=location, reason=reason)], truncated=False))
+                             dict(issues=[issue], truncated=False))
             self.assertEqual(len(model.requests), 2)
+
+    async def test_invalid_supplier_types_report_only_json_kind_in_correction_and_failure(self):
+        for value, kind in ((None, "null"), ({"private-marker": "secret-marker"}, "object"),
+                            (["private-marker"], "array"), (False, "boolean"),
+                            (17, "number"), (1.5, "number")):
+            data = proposal()
+            data["supplier"]["value"] = value
+            model = ScriptedModel([[message(data)], [message(data)]])
+            with self.subTest(kind=kind), self.assertRaises(ExtractionError) as caught:
+                await extract_bill(model, [TEXT])
+            expected = dict(issues=[dict(field="supplier.value", reason="type", value_kind=kind)], truncated=False)
+            self.assertEqual(caught.exception.category, "schema")
+            self.assertEqual(caught.exception.diagnostics, expected)
+            self.assertEqual(len(model.requests), 2)
+            feedback = json.loads(model.requests[1]["input"][0]["content"])
+            self.assertEqual(feedback["document_pages"], [{"page": 1, "text": TEXT}])
+            self.assertEqual(feedback["validation_feedback"], dict(category="schema", diagnostics=expected))
+            self.assertNotIn("marker", json.dumps(feedback) + str(caught.exception))
+
+    async def test_distinct_type_kinds_survive_index_masking_and_deduplication(self):
+        data = proposal()
+        data["charges"] = [dict(value=value, evidence=dict(page=1, quote=TEXT))
+                           for value in (None, [], False, 7, None)]
+        with self.assertRaises(ExtractionError) as caught:
+            await extract_bill(ScriptedModel([[message(data)], [message(data)]]), [TEXT])
+        self.assertEqual(caught.exception.diagnostics, dict(issues=[
+            dict(field="charges.item.value", reason="type", value_kind=kind)
+            for kind in ("array", "boolean", "null", "number")], truncated=False))
 
     async def test_issue_cap_applies_after_index_masking_and_deduplication(self):
         for many_fields in (False, True):
@@ -198,6 +232,25 @@ class BillSchemaFeedbackTests(unittest.IsolatedAsyncioTestCase):
                 await extract_bill(ScriptedModel([[message(proposal())], [message(proposal())]]), [TEXT])
         self.assertEqual(fallback.exception.category, "schema")
         self.assertIsNone(fallback.exception.diagnostics)
+
+    async def test_custom_input_type_is_classified_without_string_conversion(self):
+        class PrivateInput:
+            def __str__(self):
+                raise AssertionError("input must not be converted to text")
+
+            __repr__ = __str__
+
+        error = ValidationError.from_exception_data("private-title", [dict(
+            type="string_type", loc=("supplier", "value"), input=PrivateInput())])
+        model = ScriptedModel([[message(proposal())], [message(proposal())]])
+        with patch("energy_ai.bills.extraction.BillProposal.model_validate", side_effect=error):
+            with self.assertRaises(ExtractionError) as caught:
+                await extract_bill(model, [TEXT])
+        expected = dict(issues=[dict(field="supplier.value", reason="type", value_kind="other")], truncated=False)
+        self.assertEqual(caught.exception.category, "schema")
+        self.assertEqual(caught.exception.diagnostics, expected)
+        feedback = json.loads(model.requests[1]["input"][0]["content"])
+        self.assertEqual(feedback["validation_feedback"], dict(category="schema", diagnostics=expected))
 
 
 class BillCorrectionBoundsTests(unittest.IsolatedAsyncioTestCase):

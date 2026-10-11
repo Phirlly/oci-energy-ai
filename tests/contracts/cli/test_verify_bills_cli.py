@@ -82,21 +82,26 @@ class PublicBillVerificationTests(unittest.TestCase):
 
     @patch("deployment.verify_bills.open_model")
     def test_report_excludes_arbitrary_evidence_keys_and_quotes(self, factory):
-        data = proposal()
-        data["account"]["evidence"]["private-marker"] = "secret-marker"
-        @asynccontextmanager
-        async def opened(*args, **kwargs):
-            yield ScriptedModel([[message(data)], [message(data)]])
-        factory.side_effect = opened
-        output = io.StringIO()
-        with redirect_stdout(output):
-            code = main(["--provider", "openai"], environment={"OPENAI_API_KEY": "key-marker"})
-        report = json.loads(output.getvalue())["providers"][0]
-        self.assertEqual(code, 1)
-        self.assertEqual(report["stage"], "extraction_schema")
-        self.assertEqual(report["diagnostics"], dict(
-            issues=[dict(field="account.evidence.other", reason="extra")], truncated=False))
-        self.assertNotIn("marker", output.getvalue())
+        for invalid_type in (False, True):
+            data = proposal()
+            issue = dict(field="account.evidence.other", reason="extra")
+            if invalid_type:
+                data["supplier"]["value"] = {"private-marker": "secret-marker"}
+                issue = dict(field="supplier.value", reason="type", value_kind="object")
+            else:
+                data["account"]["evidence"]["private-marker"] = "secret-marker"
+            @asynccontextmanager
+            async def opened(*args, **kwargs):
+                yield ScriptedModel([[message(data)], [message(data)]])
+            factory.side_effect = opened
+            output = io.StringIO()
+            with self.subTest(invalid_type=invalid_type), redirect_stdout(output):
+                code = main(["--provider", "openai"], environment={"OPENAI_API_KEY": "key-marker"})
+                report = json.loads(output.getvalue())["providers"][0]
+                self.assertEqual(code, 1)
+                self.assertEqual(report["stage"], "extraction_schema")
+                self.assertEqual(report["diagnostics"], dict(issues=[issue], truncated=False))
+                self.assertNotIn("marker", output.getvalue())
 
     @patch("deployment.verify_bills.open_model")
     def test_expected_fact_report_does_not_publish_model_values(self, factory):

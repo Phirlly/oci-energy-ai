@@ -78,15 +78,20 @@ def _schema_diagnostics(error):
         "date": ("date_type", "date_parsing", "date_from_datetime_parsing", "date_from_datetime_inexact"),
         "range": ("greater_than", "greater_than_equal", "less_than", "less_than_equal"),
     }.items() for kind in kinds}
+    value_kinds = {type(None): "null", str: "string", bool: "boolean", int: "number",
+                   float: "number", dict: "object", list: "array"}
     issues = set()
-    for detail in error.errors(include_url=False, include_context=False, include_input=False):
+    for detail in error.errors(include_url=False, include_context=False, include_input=True):
         location = detail["loc"]
         field = location[0] if location and location[0] in BillProposal.model_fields else "document"
         path = [field]
         for component in location[1:5]:
             path.append("item" if isinstance(component, int) else component if component in components else "other")
-        issues.add((".".join(path), reasons.get(detail["type"], "invalid")))
-    return dict(issues=[dict(field=field, reason=reason) for field, reason in sorted(issues)[:12]],
+        reason = reasons.get(detail["type"], "invalid")
+        kind = value_kinds.get(type(detail["input"]), "other") if reason == "type" else ""
+        issues.add((".".join(path), reason, kind))
+    return dict(issues=[dict(field=field, reason=reason, **({"value_kind": kind} if kind else {}))
+                        for field, reason, kind in sorted(issues)[:12]],
                 truncated=len(issues) > 12)
 
 
