@@ -125,6 +125,7 @@ jobs:
         run: |
           mkdir -p dist/container
           docker image save --output dist/container/image.tar oci-energy-ai:check
+          chmod 0444 dist/container/image.tar
       - name: Scan image vulnerabilities
         run: |
           docker run --rm --read-only --cap-drop=ALL --security-opt=no-new-privileges \
