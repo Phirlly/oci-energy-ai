@@ -3,6 +3,12 @@ mock_provider "oci" {
   override_during = plan
 }
 
+mock_provider "oci" {
+  alias           = "home"
+  source          = "./tests/fixtures"
+  override_during = plan
+}
+
 variables {
   deployment_id    = "energy-demo"
   region           = "us-ashburn-1"
