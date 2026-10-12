@@ -13,7 +13,11 @@ installation remain under validation.
 **Preview installer:** the published package is verified; a complete fresh
 Resource Manager installation is still being validated.
 
-[![Deploy to Oracle Cloud](https://oci-resourcemanager-plugin.plugins.oci.oraclecloud.com/latest/deploy-to-oracle-cloud.svg)](https://cloud.oracle.com/resourcemanager/stacks/create?zipUrl=https%3A%2F%2Fobjectstorage.us-ashburn-1.oraclecloud.com%2Fn%2Fiddpyrbvyjar%2Fb%2Foci-energy-ai-releases-5d7383358dbb-artifacts%2Fo%2Ftemplates%252F94f711f0aa3cf27b24ec5bb753b1334fa0cdb634977108a6f642192e9bba70ad.zip)
+<p align="center">
+  <a href="https://cloud.oracle.com/resourcemanager/stacks/create?zipUrl=https%3A%2F%2Fobjectstorage.us-ashburn-1.oraclecloud.com%2Fn%2Fiddpyrbvyjar%2Fb%2Foci-energy-ai-releases-5d7383358dbb-artifacts%2Fo%2Ftemplates%252F94f711f0aa3cf27b24ec5bb753b1334fa0cdb634977108a6f642192e9bba70ad.zip">
+    <img src="https://oci-resourcemanager-plugin.plugins.oci.oraclecloud.com/latest/deploy-to-oracle-cloud.svg" alt="Deploy to Oracle Cloud">
+  </a>
+</p>
 
 Deploys the pinned [751fc20 build](https://github.com/Phirlly/oci-energy-ai/commit/751fc2087c2dcb3367ac860eb92f4be6358f8bd0).
 No GitHub configuration, local tools or API signing key are needed for this path.
