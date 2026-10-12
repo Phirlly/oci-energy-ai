@@ -3,12 +3,11 @@
 import base64
 from contextlib import asynccontextmanager
 
-from oci.auth.signers import InstancePrincipalsSecurityTokenSigner
 from oci.retry import NoneRetryStrategy
 from oci.secrets import SecretsClient
 from oci.vault import VaultsClient
 
-from energy_ai.agents.instance_auth import InstanceAuth
+from energy_ai.agents.instance_auth import CoordinatedInstanceSigner, InstanceAuth
 from energy_ai.agents.office_analysis import analyze_office
 from energy_ai.agents.provider_clients import open_model
 from energy_ai.bills.extraction import extract_bill
@@ -79,7 +78,7 @@ def load_runtime(config):
     signer = None
     setup_clients = []
     try:
-        signer = InstancePrincipalsSecurityTokenSigner(
+        signer = CoordinatedInstanceSigner(
             retry_strategy=NoneRetryStrategy(), federation_client_retry_strategy=NoneRetryStrategy())
         if signer.region != config.region:
             raise ValueError()

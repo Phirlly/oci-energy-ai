@@ -27,6 +27,12 @@ class AlreadyConfigured(SetupError):
         super().__init__(409, 'Setup is already complete. Sign in with the demo password.')
 
 
+class SettingsChanged(SetupError):
+    def __init__(self, value):
+        self.value = value
+        super().__init__(409, 'Settings changed while saving. Review the configured providers and try again.')
+
+
 @dataclass(frozen=True, repr=False)
 class SettingsSnapshot:
     value: dict
@@ -44,13 +50,16 @@ def _payload(raw, marker):
     if len(raw) > 16384:
         raise ValueError()
     value = json.loads(raw, object_pairs_hook=_unique_object)
-    if not isinstance(value, dict) or type(value.get('version')) is not int or value['version'] != 1:
+    if not isinstance(value, dict) or type(value.get('version')) is not int or value['version'] not in (1, 2):
         raise ValueError()
     if set(value) == {'version', 'setup_code'}:
-        if marker is not None or not valid_password(value['setup_code']):
+        if value['version'] != 1 or marker is not None or not valid_password(value['setup_code']):
             raise ValueError()
-    elif set(value) == {'version', 'password', 'keys'}:
+    elif set(value) == ({'version', 'password', 'keys'} if value['version'] == 1 else
+                        {'version', 'owner_code', 'password', 'keys'}):
         if marker != 'complete' or not valid_password(value['password']) or not valid_keys(value['keys']):
+            raise ValueError()
+        if value['version'] == 2 and not valid_password(value['owner_code']):
             raise ValueError()
     else:
         raise ValueError()
@@ -93,7 +102,43 @@ class SetupSecrets:
             raise AlreadyConfigured(snapshot.value)
         if not hmac.compare_digest(code.encode(), snapshot.value['setup_code'].encode()):
             raise SetupError(403, 'Incorrect setup code.')
-        value = {'version': 1, 'password': password, 'keys': dict(keys)}
+        value = {'version': 2, 'owner_code': snapshot.value['setup_code'], 'password': password, 'keys': dict(keys)}
+        encoded = self._write(snapshot, value)
+        current = self._confirm_completion()
+        actual = json.dumps(current, sort_keys=True, separators=(',', ':')).encode()
+        if not hmac.compare_digest(actual, encoded):
+            raise AlreadyConfigured(current)
+        return current
+
+    def update_keys(self, code, changes):
+        if (not valid_password(code) or not isinstance(changes, dict) or not changes
+                or not valid_keys({name: key for name, key in changes.items() if key is not None})
+                or set(changes) - {'openai', 'anthropic'}):
+            raise SetupError(422, 'Check the owner code and provider key changes.')
+        snapshot = self.read()
+        if snapshot.value.get('version') != 2 or 'password' not in snapshot.value:
+            raise SetupError(409, 'Owner settings are unavailable for this installation.')
+        if not hmac.compare_digest(code.encode(), snapshot.value['owner_code'].encode()):
+            raise SetupError(403, 'Incorrect owner code.')
+        keys = dict(snapshot.value['keys'])
+        for name, key in changes.items():
+            if key is None:
+                keys.pop(name, None)
+            else:
+                keys[name] = key
+        value = dict(snapshot.value, keys=keys)
+        if value == snapshot.value:
+            return value
+        encoded = self._write(snapshot, value)
+        for current in self._confirmations():
+            actual = json.dumps(current, sort_keys=True, separators=(',', ':')).encode()
+            if hmac.compare_digest(actual, encoded):
+                return current
+            if current != snapshot.value:
+                raise SettingsChanged(current)
+        raise SetupError()
+
+    def _write(self, snapshot, value):
         encoded = json.dumps(value, sort_keys=True, separators=(',', ':')).encode()
         if len(encoded) > 16384:
             raise SetupError(422, 'Combined settings are too large. Check the password and API keys.')
@@ -105,13 +150,14 @@ class SetupSecrets:
                                      retry_strategy=NoneRetryStrategy())
         except Exception:
             pass  # A lost response can mean committed; inspect, never replay the write.
-        current = self._confirm_completion()
-        actual = json.dumps(current, sort_keys=True, separators=(',', ':')).encode()
-        if not hmac.compare_digest(actual, encoded):
-            raise AlreadyConfigured(current)
-        return current
+        return encoded
 
     def _confirm_completion(self):
+        for current in self._confirmations():
+            return current
+        raise SetupError()
+
+    def _confirmations(self):
         deadline = self.monotonic() + 30
         for attempt in range(16):
             if attempt and self.monotonic() >= deadline:
@@ -119,14 +165,13 @@ class SetupSecrets:
             try:
                 current = self.read().value
                 if 'password' in current:
-                    return current
+                    yield current
             except SetupError:
                 pass  # Accepted writes can precede readable, coherent CURRENT content.
             remaining = deadline - self.monotonic()
             if attempt == 15 or remaining <= 0:
                 break
             self.sleep(min(2, remaining))
-        raise SetupError()
 
     def close(self):
         for client in (self.vault, self.bundles):

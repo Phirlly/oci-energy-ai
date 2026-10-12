@@ -4,9 +4,11 @@ import BillEditor from './BillEditor.jsx';
 import Insights from './Insights.jsx';
 import OfficeDemo from './OfficeDemo.jsx';
 import FirstRunSetup from './FirstRunSetup.jsx';
+import ProviderSettings from './ProviderSettings.jsx';
 
 export default function App() {
   const generation = useRef(0);
+  const sessionRead = useRef(0);
   const [session, setSession] = useState(null), [code, setCode] = useState('');
   const [docs, setDocs] = useState([]), [selected, setSelected] = useState(null);
   const [draft, setDraft] = useState(null), [dirty, setDirty] = useState(false);
@@ -18,6 +20,7 @@ export default function App() {
   const doc = docs.find(item => item.id === selected);
   function clear() {
     generation.current += 1;
+    sessionRead.current += 1;
     setSession(null); setDocs([]); setSelected(null); setDraft(null); setChecked([]); setResult(null); setDirty(false);
     setView('office');
   }
@@ -41,6 +44,16 @@ export default function App() {
     setError(''); setBusy(true);
     try { await action(); } catch (error) { handle(error); } finally { setBusy(false); }
   }
+  async function refreshSession(active = () => true) {
+    const sequence = ++sessionRead.current;
+    try {
+      const value = await request('/session');
+      if (sequence === sessionRead.current && active()) setSession(value);
+    } catch (failure) {
+      if (sequence !== sessionRead.current) failure.stale = true;
+      throw failure;
+    }
+  }
   function install(value) {
     setDocs(current => [...current.filter(item => item.id !== value.id), value]);
     if (value.approved_revision !== value.revision) {
@@ -57,9 +70,9 @@ export default function App() {
       setSetupRequired(status.required);
       if (!status.required) {
         try {
-          const value = await request('/session');
           const documents = await request('/documents');
-          if (active()) { setSession(value); setDocs(documents); }
+          await refreshSession(active);
+          if (active()) setDocs(documents);
         } catch { /* A new presenter has no session yet. */ }
       }
     } catch { if (active()) setStartupError(true); }
@@ -71,7 +84,7 @@ export default function App() {
   }, []);
   useEffect(() => {
     if (!session) return;
-    const timer = setInterval(() => request('/session').then(setSession).catch(handle), 15000);
+    const timer = setInterval(() => refreshSession().catch(handle), 15000);
     return () => clearInterval(timer);
   }, [!!session]);
   useEffect(() => {
@@ -102,7 +115,7 @@ export default function App() {
         <p className="eyebrow">From a bill to a clearer picture</p><h1>Understand the energy<br />behind the numbers.</h1>
         <p>Review electricity bills, check the facts and explore your consumption and costs.</p>
         <form onSubmit={e => { e.preventDefault(); run(async () => {
-          await request('/session', 'POST', { code }); setCode(''); setSession(await request('/session')); setDocs([]);
+          await request('/session', 'POST', { code }); setCode(''); await refreshSession(); setDocs([]);
         }); }}>
           <label>Launch code<input type="password" autoComplete="off" required value={code} onChange={e => setCode(e.target.value)} /></label>
           <button className="primary" disabled={busy}>Start session</button>
@@ -115,8 +128,12 @@ export default function App() {
         <nav className="workspace-nav" aria-label="Workspace">
           <button aria-pressed={view === 'office'} disabled={dirty || busy} onClick={() => setView('office')}>Office demo</button>
           <button aria-pressed={view === 'bills'} disabled={busy} onClick={() => setView('bills')}>Review your bills</button>
+          {session.settings_available && <button aria-pressed={view === 'settings'} disabled={dirty || busy}
+            onClick={() => setView('settings')}>Owner settings</button>}
           {dirty && <span className="muted">Save corrections before switching.</span>}
         </nav>
+        {view === 'settings' && session.settings_available && <ProviderSettings session={session} request={request}
+          refresh={refreshSession} handle={handle} />}
         <div hidden={view !== 'office'}><OfficeDemo session={session} request={request} handle={handle} /></div>
         <div className="workspace" hidden={view !== 'bills'}>
           <aside>

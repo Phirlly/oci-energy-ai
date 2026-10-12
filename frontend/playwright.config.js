@@ -21,6 +21,9 @@ export default defineConfig({
     command: '.venv/bin/python -m tests.fixtures.setup_server',
     cwd: '..', url: 'http://127.0.0.1:8768', reuseExistingServer: false
   }, {
+    command: '.venv/bin/python -m tests.fixtures.setup_server --configured',
+    cwd: '..', url: 'http://127.0.0.1:8769', reuseExistingServer: false
+  }, {
     command: '.venv/bin/python -m tests.fixtures.web_server',
     cwd: '..', url: 'http://127.0.0.1:8766', reuseExistingServer: false,
     env: { DEMO_PASSWORD: 'admin' }

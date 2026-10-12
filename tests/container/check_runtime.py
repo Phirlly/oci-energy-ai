@@ -131,5 +131,8 @@ if __name__ == '__main__':
         'tests.contracts.agents.test_provider_requests',
         'tests.contracts.agents.test_anthropic_messages',
         'tests.contracts.web.test_hosted_runtime',
+        'tests.contracts.web.test_setup_secrets',
+        'tests.contracts.web.test_first_run',
+        'tests.contracts.web.test_provider_settings',
     ]))
     raise SystemExit(not unittest.TextTestRunner(verbosity=2).run(suite).wasSuccessful())

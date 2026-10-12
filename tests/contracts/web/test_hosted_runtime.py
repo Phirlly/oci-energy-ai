@@ -61,7 +61,7 @@ class VaultRuntimeTests(unittest.TestCase):
         self.signer.region = 'us-ashburn-1'
         self.client = MagicMock()
         self.client.get_secret_bundle.return_value = bundle()
-        self.signer_factory = self.enterContext(patch('energy_ai.web.hosted_runtime.InstancePrincipalsSecurityTokenSigner',
+        self.signer_factory = self.enterContext(patch('energy_ai.web.hosted_runtime.CoordinatedInstanceSigner',
                                                      return_value=self.signer))
         self.client_factory = self.enterContext(patch('energy_ai.web.hosted_runtime.SecretsClient', return_value=self.client))
 

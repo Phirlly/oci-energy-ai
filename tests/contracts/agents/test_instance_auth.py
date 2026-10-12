@@ -5,16 +5,72 @@ import threading
 import re
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
 import httpx
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import hashes
 from oci.auth.signers.security_token_signer import X509FederationClientBasedSecurityTokenSigner
+from oci.auth.signers import InstancePrincipalsSecurityTokenSigner
+import requests
 
+from energy_ai.agents import instance_auth
 from energy_ai.agents.instance_auth import InstanceAuth
 
 
 class InstanceSigningTests(unittest.IsolatedAsyncioTestCase):
+    async def test_vault_refresh_waits_for_complete_model_signature_and_cleanup_waits(self):
+        keys = [rsa.generate_private_key(public_exponent=65537, key_size=2048) for _ in range(2)]
+        generation = [0]
+        entered, release, refreshing, refreshed, cleaned = (threading.Event() for _ in range(5))
+        def refresh():
+            refreshed.set()
+            generation[0] = 1
+        federation = SimpleNamespace(get_security_token=lambda: f'token-{generation[0]}',
+            refresh_security_token=refresh,
+            session_key_supplier=SimpleNamespace(get_key_pair=lambda: {'private': keys[generation[0]]}))
+        def initialize(signer, **kwargs):
+            X509FederationClientBasedSecurityTokenSigner.__init__(signer, federation)
+        with patch.object(InstancePrincipalsSecurityTokenSigner, '__init__', initialize):
+            signer = instance_auth.CoordinatedInstanceSigner()
+        self.assertIsInstance(signer, InstancePrincipalsSecurityTokenSigner)
+        auth = InstanceAuth(signer, cleanup=cleaned.set)
+        self.addCleanup(auth.close)
+        self.addCleanup(release.set)
+        native_sign = signer.do_request_sign
+        def blocked(*args, **kwargs):
+            if not entered.is_set():
+                entered.set()
+                if not release.wait(5):
+                    raise TimeoutError()
+            return native_sign(*args, **kwargs)
+        def vault_refresh():
+            refreshing.set()
+            signer.refresh_security_token()
+            prepared = requests.Request('GET', 'https://vaults.example/secrets').prepare()
+            signer(prepared)
+            return prepared
+        async with httpx.AsyncClient(auth=auth, transport=httpx.MockTransport(lambda request: httpx.Response(200))) as client:
+            with patch.object(signer, 'do_request_sign', side_effect=blocked):
+                model = asyncio.create_task(client.get('https://inference.example/responses'))
+                self.assertTrue(await asyncio.to_thread(entered.wait, 2))
+                vault = asyncio.create_task(asyncio.to_thread(vault_refresh))
+                self.assertTrue(await asyncio.to_thread(refreshing.wait, 2))
+                self.assertFalse(await asyncio.to_thread(refreshed.wait, .1))
+                release.set()
+                result, prepared = await asyncio.gather(model, vault)
+        self.assertIn('ST$token-0', result.request.headers['authorization'])
+        self.assertIn('ST$token-1', prepared.headers['authorization'])
+        for index, request in enumerate((result.request, prepared)):
+            fields = dict(re.findall(r'([a-z]+)="([^"]+)"', request.headers['authorization']))
+            path = '/responses' if index == 0 else '/secrets'
+            lines = [f'{name}: get {path}' if name == '(request-target)' else f'{name}: {request.headers[name]}'
+                     for name in fields['headers'].split()]
+            keys[index].public_key().verify(base64.b64decode(fields['signature']),
+                '\n'.join(lines).encode(), padding.PKCS1v15(), hashes.SHA256())
+        auth.close()
+        self.assertTrue(await asyncio.to_thread(cleaned.wait, 2))
+
     async def test_native_signer_refreshes_token_and_key_and_signs_exact_body(self):
         keys = [rsa.generate_private_key(public_exponent=65537, key_size=2048) for _ in range(2)]
         generation = [0]

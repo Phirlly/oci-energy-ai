@@ -15,6 +15,9 @@ const choices = {
 export default function BillEditor({ doc, draft, dirty, busy, providers, models, change, save, approve, extract, cancel }) {
   const [provider, setProvider] = React.useState(providers[0] || '');
   const [consent, setConsent] = React.useState(false);
+  React.useEffect(() => {
+    if (!providers.includes(provider)) { setProvider(providers[0] || ''); setConsent(false); }
+  }, [providers, provider]);
   const running = doc.job?.status === 'running';
   const evidence = doc.proposal?.evidence || {};
   function fieldEvidence(name) {
@@ -44,7 +47,7 @@ export default function BillEditor({ doc, draft, dirty, busy, providers, models,
           : 'Bill text is sent to ' + provider + '.'}</p>
         <label className="check"><input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} />
           Send this bill’s extracted text, including identifiers, to the selected provider for a proposal.</label>
-        <button disabled={!consent || !provider || busy || running || dirty} onClick={() => extract(provider)}>Extract with AI</button>
+        <button disabled={!consent || !providers.includes(provider) || busy || running || dirty} onClick={() => extract(provider)}>Extract with AI</button>
       </> : <p><strong>AI is not configured.</strong> Enter facts manually or use the example.
         Server-side provider credentials enable optional extraction.</p>}
       {running && <p role="status">Reading bill… <button onClick={cancel}>Cancel extraction</button></p>}

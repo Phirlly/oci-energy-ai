@@ -11,6 +11,11 @@ export default function OfficeDemo({ session, request, handle }) {
   const [provider, setProvider] = useState(session.providers[0] || ''), [question, setQuestion] = useState('evaluate_battery');
   const [consent, setConsent] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState('');
   const mounted = useRef(true), pending = useRef(null), revision = useRef(0);
+  useEffect(() => {
+    if (!session.providers.includes(provider)) {
+      setProvider(session.providers[0] || ''); setConsent(false); pending.current = null;
+    }
+  }, [session.providers, provider]);
   function fail(error) {
     if (!mounted.current || error.stale) return;
     if (error.status === 401) handle(error);
@@ -123,7 +128,7 @@ export default function OfficeDemo({ session, request, handle }) {
           <label className="check"><input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} />
             Send the public office sample and selected scenario to {provider} for AI analysis. No uploaded bills are included.</label>
         </fieldset>
-        <button className="primary" disabled={!consent || !valid || busy || running} onClick={() => act(async () => {
+        <button className="primary" disabled={!consent || !session.providers.includes(provider) || !valid || busy || running} onClick={() => act(async () => {
           pending.current ||= crypto.randomUUID();
           const value = await request('/office/runs', 'POST', { request_key: pending.current, provider, consent: true, controls: numeric, question });
           if (mounted.current) { setRun(value); pending.current = null; }

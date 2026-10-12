@@ -40,8 +40,9 @@ are optional.
    Open that secret in OCI Vault, reveal its **CURRENT** contents and copy
    `setup_code`.
 5. Open **Energy demo** (`application_origin`). Enter the setup code, choose
-   your demo password and optionally add provider keys. Select **Save setup**.
-   Credentials are saved in Vault; never put them in Terraform variables.
+   your demo password and optionally add either, both or neither provider key.
+   Select **Save setup**. Credentials are saved in Vault; never put them in Terraform
+   variables. Keep the owner code private; presenters only need the demo password.
 6. Enter your password in **Launch code** and select **Start session**.
 
 ## Run the lab
@@ -134,6 +135,26 @@ image is retained automatically. This preview
 does not provide in-place upgrades or GitHub rollback for Console installations.
 
 ## Optional paths
+
+<details>
+<summary>Add, replace or remove provider keys</summary>
+
+In new installations from the updated package, sign in and select **Owner settings**.
+Enter your owner code, choose **Keep unchanged**, **Set a new key** or **Remove key**
+for each provider, then select **Save provider keys**. The saved password stays the
+same. New analyses use the saved keys immediately; an analysis already running can
+finish with its previous key. Settings survive application restart.
+
+Your owner code is the original setup code, retained as `owner_code` in the settings
+secret's CURRENT contents. The demo password alone cannot change provider keys.
+Saved keys are never displayed in the application. This Console flow does not
+import GitHub secrets. Earlier packages do not have this maintenance screen;
+use the updated package for a fresh installation.
+
+Saving does not test model access. In **Office demo**, choose the provider and run
+the public example after reviewing consent. Model requests may incur charges.
+
+</details>
 
 <details>
 <summary>Change the Console deployment's AI models</summary>

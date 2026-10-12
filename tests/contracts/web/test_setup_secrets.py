@@ -29,7 +29,8 @@ class SetupPersistenceTests(unittest.TestCase):
     def test_claim_replaces_current_once_preserving_exact_password_and_optional_keys(self):
         password = ' énergie solaire ☀ '
         result = self.store.complete(CODE, password, {'openai': 'invented-key'})
-        self.assertEqual(result, {'version': 1, 'password': password, 'keys': {'openai': 'invented-key'}})
+        self.assertEqual(result, {'version': 2, 'owner_code': CODE, 'password': password,
+                                  'keys': {'openai': 'invented-key'}})
         self.assertEqual(len(self.vault.writes), 1)
         identity, details, guard = self.vault.writes[0]
         self.assertEqual((identity, guard), (SECRET, '1'))
@@ -216,6 +217,19 @@ class SetupReadContracts(unittest.TestCase):
             with self.subTest(marker=marker), self.assertRaises(SetupError):
                 self.store.read()
 
+    def test_completed_legacy_and_owner_settings_are_strict_and_cannot_reopen_claim(self):
+        from tests.fixtures.setup_runtime import COMPLETED
+        for value in ({'version': 1, 'password': 'admin', 'keys': {}}, COMPLETED):
+            self.vault = MemoryVault(value)
+            self.store = SetupSecrets(self.vault, self.vault, SECRET)
+            self.assertEqual(self.store.read().value, value)
+        for value in (COMPLETED | {'owner_code': ''}, COMPLETED | {'version': 1},
+                      {key: val for key, val in COMPLETED.items() if key != 'owner_code'},
+                      PENDING | {'version': 2}, COMPLETED | {'extra': 'private-marker'}):
+            self.vault.value = value
+            with self.subTest(fields=list(value)), self.assertRaises(SetupError):
+                self.store.read()
+
     def test_duplicate_oversized_or_invalid_json_and_missing_metadata_are_rejected(self):
         for raw in ('{"version":1,"version":1}', 'x' * 24577, '[]', '{'):
             with self.subTest(raw=raw[:20]), patch.object(
@@ -236,6 +250,24 @@ class SetupReadContracts(unittest.TestCase):
 
 
 class SetupSdkRequests(unittest.TestCase):
+    def test_native_401_recovery_preserves_original_conditional_write_guard(self):
+        from oci.response import Response
+        from oci.vault.models import UpdateSecretDetails
+        signer = Mock(spec=InstancePrincipalsSecurityTokenSigner)
+        vault = VaultsClient({'region': 'us-ashburn-1'}, signer=signer, retry_strategy=NoneRetryStrategy())
+        self.addCleanup(vault.base_client.session.close)
+        attempts = []
+        def send(request, *args):
+            attempts.append((request.method, request.header_params['if-match']))
+            if len(attempts) == 1:
+                raise ServiceError(401, 'NotAuthenticated', {}, 'private-marker')
+            return Response(200, {}, None, None)
+        with patch.object(vault.base_client, 'request', side_effect=send):
+            vault.update_secret(SECRET, UpdateSecretDetails(), if_match='original-etag',
+                                retry_strategy=NoneRetryStrategy())
+        self.assertEqual(attempts, [('PUT', 'original-etag'), ('PUT', 'original-etag')])
+        signer.refresh_security_token.assert_called_once()
+
     def test_real_sdk_translates_version_guard_and_current_content_without_retries(self):
         memory = MemoryVault()
         signer = Mock(spec=InstancePrincipalsSecurityTokenSigner)

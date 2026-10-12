@@ -4,7 +4,7 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 
 from energy_ai.web.hosted_runtime import HostedRuntime
-from energy_ai.web.setup_secrets import AlreadyConfigured, SetupError
+from energy_ai.web.setup_secrets import AlreadyConfigured, SettingsChanged, SetupError
 
 
 class HostedSetup(HostedRuntime):
@@ -16,6 +16,7 @@ class HostedSetup(HostedRuntime):
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='oci-setup')
         self.pending = None
         self.closed = False
+        self.settings_available = False
         if 'password' in initial:
             self._install(initial)
 
@@ -30,14 +31,15 @@ class HostedSetup(HostedRuntime):
         self.models.clear()
         self.models.update({p: self.config.models()[p] for p in self.providers})
         self.password = value['password']
+        self.settings_available = value['version'] == 2
 
-    async def _finish(self, code, password, keys):
+    async def _finish(self, operation, arguments):
         try:
             if self.closed:
                 raise SetupError()
-            future = asyncio.get_running_loop().run_in_executor(self.executor, self.settings.complete, code, password, keys)
+            future = asyncio.get_running_loop().run_in_executor(self.executor, operation, *arguments)
             value = await asyncio.shield(future)
-        except AlreadyConfigured as error:
+        except (AlreadyConfigured, SettingsChanged) as error:
             if not self.closed:
                 self._install(error.value)
             raise
@@ -56,13 +58,21 @@ class HostedSetup(HostedRuntime):
             self.pending = None
 
     async def complete(self, code, password, keys):
-        if self.closed:
-            raise SetupError()
         if not self.required:
             raise SetupError(409, 'Setup is already complete. Sign in with the demo password.')
+        await self._submit(self.settings.complete, code, password, dict(keys))
+
+    async def update_keys(self, code, changes):
+        if not self.settings_available:
+            raise SetupError(409, 'Owner settings are unavailable for this installation.')
+        await self._submit(self.settings.update_keys, code, dict(changes))
+
+    async def _submit(self, operation, *arguments):
+        if self.closed:
+            raise SetupError()
         if self.pending is not None:
-            raise SetupError(409, 'Setup is in progress. Wait a moment before trying again.')
-        self.pending = asyncio.create_task(self._finish(code, password, dict(keys)))
+            raise SetupError(409, 'A settings operation is in progress. Wait a moment before trying again.')
+        self.pending = asyncio.create_task(self._finish(operation, arguments))
         self.pending.add_done_callback(self._finished)
         try:
             async with asyncio.timeout(90):

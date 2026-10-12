@@ -7,16 +7,16 @@ test('operator claims setup, chooses admin and optional provider, then signs in 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(origin);
   await expect(page.getByRole('heading', { name: 'Set up your demo' })).toBeVisible();
-  await page.getByLabel('Setup code', { exact: true }).fill('incorrect-code');
+  await page.getByLabel('Owner code', { exact: true }).fill('incorrect-code');
   await page.getByLabel('Demo password', { exact: true }).fill('admin');
   await page.getByLabel('OpenAI API key (optional)', { exact: true }).fill('invented-browser-key');
   await page.getByRole('button', { name: 'Save setup' }).click();
   await expect(page.getByRole('alert')).toContainText('Incorrect setup code');
-  await page.getByLabel('Setup code', { exact: true }).fill(setupCode);
+  await page.getByLabel('Owner code', { exact: true }).fill(setupCode);
   await page.getByRole('button', { name: 'Save setup' }).focus();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('status')).toContainText('Setup complete');
-  await expect(page.getByLabel('Setup code', { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel('Owner code', { exact: true })).toHaveCount(0);
   await page.getByLabel('Launch code').fill('admin');
   await page.getByRole('button', { name: 'Start session' }).click();
   await expect(page.getByRole('heading', { name: 'Your electricity, understood.' })).toBeVisible();
@@ -48,7 +48,7 @@ test('failed setup remains editable without exposing submitted secrets', async (
     ? route.fulfill({ json: { required: true } })
     : route.fulfill({ status: 503, json: { detail: 'Setup could not be verified. Wait a moment and try again.' } }));
   await page.goto(origin);
-  await page.getByLabel('Setup code', { exact: true }).fill(setupCode);
+  await page.getByLabel('Owner code', { exact: true }).fill(setupCode);
   await page.getByLabel('Demo password', { exact: true }).fill('private-password-marker');
   await page.getByRole('button', { name: 'Save setup' }).click();
   await expect(page.getByRole('alert')).toContainText('Setup could not be verified');
@@ -66,7 +66,7 @@ test('setup preserves a printable Unicode password within the server character l
     return route.fulfill({ json: { required: false } });
   });
   await page.goto(origin);
-  await page.getByLabel('Setup code', { exact: true }).fill(setupCode);
+  await page.getByLabel('Owner code', { exact: true }).fill(setupCode);
   await page.getByLabel('Demo password', { exact: true }).fill(password);
   await expect(page.getByLabel('Demo password', { exact: true })).toHaveValue(password);
   await page.getByRole('button', { name: 'Save setup' }).click();

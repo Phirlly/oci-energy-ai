@@ -22,6 +22,7 @@ from energy_ai.web.sessions import Sessions, TTL
 from energy_ai.web.origin import OriginPolicy
 from energy_ai.web.passwords import PASSWORD_GUIDANCE, valid_password
 from energy_ai.web.setup import setup_routes
+from energy_ai.web.settings import settings_routes
 
 
 def create_app(*, access_code, origin, providers=(), extractor=None, model_ids=None, clock=time.monotonic,
@@ -115,6 +116,7 @@ def create_app(*, access_code, origin, providers=(), extractor=None, model_ids=N
     async def session(request: Request):
         current = store.get(request.cookies.get("energy_session"))
         return dict(providers=list(providers), models=models,
+                    settings_available=setup is not None and setup.settings_available,
                     expires_in=max(0, int(current.expires - clock())))
 
     @app.delete("/api/session")
@@ -125,6 +127,7 @@ def create_app(*, access_code, origin, providers=(), extractor=None, model_ids=N
         return response
 
     app.include_router(setup_routes(store, setup))
+    app.include_router(settings_routes(store, setup))
     app.include_router(document_routes(store, providers, extractor))
     app.include_router(office_routes(store, models, office_analyzer))
     assets = Path(__file__).resolve().parents[2] / "frontend" / "dist"

@@ -2,9 +2,27 @@
 
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+import threading
 
 import httpx
 import requests
+from oci.auth.signers import InstancePrincipalsSecurityTokenSigner
+
+
+class CoordinatedInstanceSigner(InstancePrincipalsSecurityTokenSigner):
+    """Keep token/key reset, signing and forced refresh atomic across SDK users."""
+
+    def __init__(self, **kwargs):
+        self._signing_guard = threading.RLock()
+        super().__init__(**kwargs)
+
+    def __call__(self, request, enforce_content_headers=True):
+        with self._signing_guard:
+            return super().__call__(request, enforce_content_headers)
+
+    def refresh_security_token(self):
+        with self._signing_guard:
+            return super().refresh_security_token()
 
 
 class InstanceAuth(httpx.Auth):

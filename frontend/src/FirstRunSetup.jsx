@@ -33,19 +33,21 @@ export default function FirstRunSetup({ completed }) {
     <p className="eyebrow">Welcome / First-time setup</p><h1>Set up your demo</h1>
     <p>Choose the password your presenters will use. Your settings are saved securely in OCI Vault.</p>
     <p className="muted" id="setup-guidance">In OCI Console, open the deployment’s setup secret in Vault and
-      copy the <strong>setup_code</strong> value from its current version. This confirms you own this installation.</p>
+      copy the <strong>setup_code</strong> value from its current version. This owner code confirms you own this installation.
+      Keep it private; after setup it is stored as <strong>owner_code</strong> for updating provider keys.</p>
     {error && <div className="error" role="alert">{error}</div>}
     <form onSubmit={save}>
       <fieldset disabled={busy}>
-        <label>Setup code<input type="password" autoComplete="off" required
+        <label>Owner code<input type="password" autoComplete="off" required
           aria-describedby="setup-guidance" value={fields.setup_code} onChange={e => change('setup_code', e.target.value)} /></label>
         <label>Demo password<input type="password" autoComplete="new-password" required
           aria-describedby="password-guidance" value={fields.password} onChange={e => change('password', e.target.value)} /></label>
         <p className="muted" id="password-guidance">Choose a nonblank password, up to 200 printable characters.
           Spaces and Unicode are supported; matching is exact.</p>
         <h2>Optional AI providers</h2>
-        <p className="muted">OCI is available through your deployment’s identity. Add keys to also use OpenAI or Anthropic.
-          Provider availability is checked when you run an analysis.</p>
+        <p className="muted">OCI uses your deployment’s identity. Add either key, both or neither; you can change them
+          later in Owner settings. Keys are saved in OCI Vault. Saving does not test access; run the public office
+          example to check each provider. Model requests may incur charges.</p>
         <label>OpenAI API key (optional)<input type="password" autoComplete="off" maxLength={4096}
           value={fields.openai_key} onChange={e => change('openai_key', e.target.value)} /></label>
         <label>Anthropic API key (optional)<input type="password" autoComplete="off" maxLength={4096}

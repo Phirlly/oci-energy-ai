@@ -13,6 +13,7 @@ from tests.fixtures.hosted_runtime import CONFIG, SECRET, bundle
 
 CODE = 'invented-setup-code-32-characters'
 PENDING = {'version': 1, 'setup_code': CODE}
+COMPLETED = {'version': 2, 'owner_code': CODE, 'password': 'admin', 'keys': {'openai': 'invented-key'}}
 SETTINGS_CONFIG = CONFIG | {'version': 2, 'secret_ids': {'settings': SECRET},
                             'model_ids': {'openai': 'public-model-fixture'}}
 
