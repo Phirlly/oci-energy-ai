@@ -50,11 +50,11 @@ test('late heartbeat cannot restore a signed-out session', async ({ page }) => {
   await page.clock.fastForward(16000);
   await ready;
   await page.getByRole('button', { name: 'Sign out' }).click();
-  await expect(page.getByLabel('Launch code')).toBeVisible();
+  await expect(page.getByLabel('Demo password')).toBeVisible();
   const delivered = page.waitForResponse(response => response.url().endsWith('/api/session') && response.request().method() === 'GET');
   release();
   await delivered;
-  await expect(page.getByLabel('Launch code')).toBeVisible();
+  await expect(page.getByLabel('Demo password')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Sign out' })).toHaveCount(0);
 });
 
@@ -104,8 +104,8 @@ test.describe('scripted provider browser contract', () => {
 
 async function login(page) {
   await page.goto('/');
-  await page.getByLabel('Launch code').fill('admin');
-  await page.getByRole('button', { name: 'Start session' }).click();
+  await page.getByLabel('Demo password').fill('admin');
+  await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('heading', { name: 'Your electricity, understood.' })).toBeVisible();
   await page.getByRole('button', { name: 'Review your bills', exact: true }).click();
 }
@@ -163,7 +163,7 @@ test('malformed upload reports a recoverable error and mobile controls fit', asy
   await expect(page.getByLabel('Supplier')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.getByRole('button', { name: 'Sign out' }).click();
-  await expect(page.getByLabel('Launch code')).toBeVisible();
+  await expect(page.getByLabel('Demo password')).toBeVisible();
 });
 
 for (const sample of [

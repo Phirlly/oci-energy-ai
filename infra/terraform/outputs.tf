@@ -34,6 +34,6 @@ output "key_ocid" {
 }
 
 output "settings_secret_ocid" {
-  description = "Open this secret in OCI Vault and reveal CURRENT content to retrieve setup_code. No password or key belongs in Terraform."
+  description = "In the deployment region, open Identity & Security > Secret Management, select the deployment compartment and this secret's OCID. Under Versions, open CURRENT actions > View Secret Contents, enable decoded Base64 and copy only setup_code into Owner code in the demo. Keep credentials out of Terraform."
   value       = try(oci_vault_secret.settings[0].id, null)
 }

@@ -3,8 +3,8 @@ import { execFileSync } from 'node:child_process';
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
-  await page.getByLabel('Launch code').fill('admin');
-  await page.getByRole('button', { name: 'Start session' }).click();
+  await page.getByLabel('Demo password').fill('admin');
+  await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('heading', { name: 'Your electricity, understood.' })).toBeVisible();
   await page.getByRole('button', { name: 'Review your bills', exact: true }).click();
 });

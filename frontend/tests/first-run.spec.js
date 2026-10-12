@@ -11,14 +11,14 @@ test('operator claims setup, chooses admin and optional provider, then signs in 
   await page.getByLabel('Demo password', { exact: true }).fill('admin');
   await page.getByLabel('OpenAI API key (optional)', { exact: true }).fill('invented-browser-key');
   await page.getByRole('button', { name: 'Save setup' }).click();
-  await expect(page.getByRole('alert')).toContainText('Incorrect setup code');
+  await expect(page.getByRole('alert')).toContainText('Incorrect owner code');
   await page.getByLabel('Owner code', { exact: true }).fill(setupCode);
   await page.getByRole('button', { name: 'Save setup' }).focus();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('status')).toContainText('Setup complete');
   await expect(page.getByLabel('Owner code', { exact: true })).toHaveCount(0);
-  await page.getByLabel('Launch code').fill('admin');
-  await page.getByRole('button', { name: 'Start session' }).click();
+  await page.getByLabel('Demo password').fill('admin');
+  await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('heading', { name: 'Your electricity, understood.' })).toBeVisible();
   await expect(page.getByLabel('Office AI provider').locator('option')).toHaveText(['oci', 'openai']);
   await page.getByLabel('Office AI provider').selectOption('openai');
@@ -28,7 +28,7 @@ test('operator claims setup, chooses admin and optional provider, then signs in 
   expect(await page.evaluate(() => [localStorage.length, sessionStorage.length])).toEqual([0, 0]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.getByRole('button', { name: 'Sign out' }).click();
-  await expect(page.getByLabel('Launch code')).toBeVisible();
+  await expect(page.getByLabel('Demo password')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Set up your demo' })).toHaveCount(0);
 });
 
@@ -37,10 +37,10 @@ test('startup status failure is visible and can be retried before login', async 
   await page.route('**/api/setup', route => failed ? route.abort() : route.fulfill({ json: { required: false } }));
   await page.goto(origin);
   await expect(page.getByRole('alert')).toContainText('Could not check demo setup');
-  await expect(page.getByLabel('Launch code')).toHaveCount(0);
+  await expect(page.getByLabel('Demo password')).toHaveCount(0);
   failed = false;
   await page.getByRole('button', { name: 'Retry' }).click();
-  await expect(page.getByLabel('Launch code')).toBeVisible();
+  await expect(page.getByLabel('Demo password')).toBeVisible();
 });
 
 test('failed setup remains editable without exposing submitted secrets', async ({ page }) => {

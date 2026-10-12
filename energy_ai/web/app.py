@@ -102,7 +102,7 @@ def create_app(*, access_code, origin, providers=(), extractor=None, model_ids=N
         if setup is not None and setup.required:
             raise HTTPException(503, 'Complete the initial setup before signing in.')
         if not valid_password(body.code) or not hmac.compare_digest(body.code.encode(), password.encode()):
-            raise HTTPException(401, "Incorrect launch code.")
+            raise HTTPException(401, "Incorrect demo password.")
         old = request.cookies.get("energy_session")
         if old:
             store.close(old)

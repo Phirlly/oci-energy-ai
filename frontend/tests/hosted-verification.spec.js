@@ -51,6 +51,22 @@ test('standalone checker completes office, PDF, bill review, mobile and logout j
   expect(result).toEqual({ code: 0, stdout: 'browser: passed (local-test)\n', stderr: '' });
 });
 
+test('standalone checker also supports the published login labels', async () => {
+  let replaced = false;
+  await withProxy(async (request, response) => {
+    if (request.method !== 'GET' || !/^\/assets\/[^/]+\.js$/.test(request.url)) return false;
+    const asset = await fetch(upstream + request.url, { signal: AbortSignal.timeout(10000) });
+    const source = await asset.text();
+    replaced ||= source.includes('Demo password') && source.includes('Sign in');
+    response.writeHead(asset.status, { 'Content-Type': 'text/javascript' });
+    response.end(source.replaceAll('Demo password', 'Launch code').replaceAll('Sign in', 'Start session'));
+    return true;
+  }, async origin => {
+    expect(await checker(origin)).toEqual({ code: 0, stdout: 'browser: passed (local-test)\n', stderr: '' });
+    expect(replaced).toBe(true);
+  });
+});
+
 test('wrong password is redacted and cleanup is attempted after rejected login', async () => {
   await withProxy(async () => false, async (origin, requests) => {
     const result = await checker(origin, 'private-password-marker');

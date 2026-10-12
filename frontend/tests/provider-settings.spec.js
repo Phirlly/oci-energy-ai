@@ -57,7 +57,7 @@ test('wrong owner cannot save and session expiry removes entered credentials', a
   await expect(page.getByRole('alert')).not.toContainText('private');
   await page.request.delete(origin + '/api/session', { headers });
   await page.getByRole('button', { name: 'Save provider keys', exact: true }).click();
-  await expect(page.getByLabel('Launch code')).toBeVisible();
+  await expect(page.getByLabel('Demo password')).toBeVisible();
   await expect(page.getByLabel('Owner code', { exact: true })).toHaveCount(0);
   await expect(page.getByLabel('New OpenAI API key')).toHaveCount(0);
 });

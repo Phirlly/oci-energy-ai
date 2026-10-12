@@ -21,8 +21,8 @@ export default function FirstRunSetup({ completed }) {
         } catch { /* Keep the form available when completion cannot be confirmed. */ }
       }
       const messages = {
-        403: 'Incorrect setup code.',
-        422: 'Check the setup code, password and optional API keys. Use a nonblank password of up to 200 printable characters.',
+        403: 'Incorrect owner code.',
+        422: 'Check the owner code, password and optional API keys. Use a nonblank password of up to 200 printable characters.',
         429: 'Too many setup or sign-in attempts. Try again in a minute.',
         409: 'Setup is in progress. Wait a moment before trying again.'
       };
@@ -32,8 +32,11 @@ export default function FirstRunSetup({ completed }) {
   return <section className="welcome first-run">
     <p className="eyebrow">Welcome / First-time setup</p><h1>Set up your demo</h1>
     <p>Choose the password your presenters will use. Your settings are saved securely in OCI Vault.</p>
-    <p className="muted" id="setup-guidance">In OCI Console, open the deployment’s setup secret in Vault and
-      copy the <strong>setup_code</strong> value from its current version. This owner code confirms you own this installation.
+    <p className="muted" id="setup-guidance">Find <strong>Owner setup secret</strong> in the Resource Manager Apply outputs.
+      In the same region, open <strong>Identity &amp; Security → Secret Management</strong>, choose the deployment’s
+      compartment and open the secret matching that OCID. Under <strong>Versions</strong>, open the
+      <strong> CURRENT</strong> version’s actions, select <strong>View Secret Contents</strong> and enable decoded Base64.
+      Copy only the <strong>setup_code</strong> value. This owner code confirms you own this installation.
       Keep it private; after setup it is stored as <strong>owner_code</strong> for updating provider keys.</p>
     {error && <div className="error" role="alert">{error}</div>}
     <form onSubmit={save}>

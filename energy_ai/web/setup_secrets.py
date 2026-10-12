@@ -96,12 +96,12 @@ class SetupSecrets:
 
     def complete(self, code, password, keys):
         if not valid_password(code) or not valid_password(password) or not valid_keys(keys):
-            raise SetupError(422, 'Check the setup code, password and optional API keys.')
+            raise SetupError(422, 'Check the owner code, password and optional API keys.')
         snapshot = self.read()
         if 'password' in snapshot.value:
             raise AlreadyConfigured(snapshot.value)
         if not hmac.compare_digest(code.encode(), snapshot.value['setup_code'].encode()):
-            raise SetupError(403, 'Incorrect setup code.')
+            raise SetupError(403, 'Incorrect owner code.')
         value = {'version': 2, 'owner_code': snapshot.value['setup_code'], 'password': password, 'keys': dict(keys)}
         encoded = self._write(snapshot, value)
         current = self._confirm_completion()

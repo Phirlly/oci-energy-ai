@@ -31,7 +31,7 @@ def main():
     # Standalone process: prevent SDK, transport and server tracebacks from logging bill content.
     # No request toggles, raw request logs or response artifacts.
     logging.disable(logging.CRITICAL)
-    print(f"Open {origin}\nLaunch code: {code}\nSession lasts 30 minutes. Private bills clear on sign-out/restart. "
+    print(f"Open {origin}\nDemo password: {code}\nSession lasts 30 minutes. Private bills clear on sign-out/restart. "
           "Public office history is shared and kept for 7 days (100 runs).", flush=True)
     uvicorn.run(app, host="127.0.0.1", port=args.port, workers=1, access_log=False, log_config=None)
 

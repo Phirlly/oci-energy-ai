@@ -109,7 +109,7 @@ class HostedVerificationTests(unittest.TestCase):
         with self.assertRaises(DeploymentError) as raised:
             self.verifier.check()
         self.assertNotIn('private-marker', str(raised.exception))
-        self.assertNotIn('Incorrect launch code', str(raised.exception))
+        self.assertNotIn('Incorrect demo password', str(raised.exception))
 
     def bill_failure(self, change):
         original = Document.public

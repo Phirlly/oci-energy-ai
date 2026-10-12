@@ -117,10 +117,10 @@ export default function App() {
         <form onSubmit={e => { e.preventDefault(); run(async () => {
           await request('/session', 'POST', { code }); setCode(''); await refreshSession(); setDocs([]);
         }); }}>
-          <label>Launch code<input type="password" autoComplete="off" required value={code} onChange={e => setCode(e.target.value)} /></label>
-          <button className="primary" disabled={busy}>Start session</button>
+          <label>Demo password<input type="password" autoComplete="off" required value={code} onChange={e => setCode(e.target.value)} /></label>
+          <button className="primary" disabled={busy}>Sign in</button>
         </form>
-        <p className="muted">Use the code provided by your presenter. Private bills clear on sign-out, session expiry or restart. Public office history is shared and retained for 7 days, up to 100 runs.</p>
+        <p className="muted">Use the demo password chosen during setup or provided by your presenter. Private bills clear on sign-out, session expiry or restart. Public office history is shared and retained for 7 days, up to 100 runs.</p>
       </section> : <>
         <div className="hero"><div><p className="eyebrow">Energy intelligence / From evidence to insight</p>
           <h1>Your electricity, understood.</h1><p>Explore a prepared office month or review your own electricity bills.</p></div>

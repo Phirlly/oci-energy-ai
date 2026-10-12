@@ -92,10 +92,10 @@ async function journey(chromium, expect, rejectPolicy) {
   stage = 'login';
   const page = await context.newPage();
   await page.goto(origin);
-  await page.getByLabel('Launch code').fill(process.env.DEMO_PASSWORD);
+  await page.getByLabel(/^(Demo password|Launch code)$/).fill(process.env.DEMO_PASSWORD);
   const [login] = await Promise.all([
     page.waitForResponse(response => response.url() === origin + '/api/session' && response.request().method() === 'POST'),
-    page.getByRole('button', { name: 'Start session' }).click()]);
+    page.getByRole('button', { name: /^(Sign in|Start session)$/ }).click()]);
   requireThat(login.status() === 200);
   await expect(page.getByRole('heading', { name: 'A month in the office.' })).toBeVisible();
   const cookies = (await context.cookies(origin + '/api/session')).filter(cookie => cookie.name === 'energy_session');
@@ -105,7 +105,7 @@ async function journey(chromium, expect, rejectPolicy) {
   stage = 'bill-review'; await billJourney(page, expect);
   stage = 'logout';
   await page.getByRole('button', { name: 'Sign out' }).click();
-  await expect(page.getByLabel('Launch code')).toBeVisible();
+  await expect(page.getByLabel(/^(Demo password|Launch code)$/)).toBeVisible();
   const response = await context.request.get(origin + '/api/session', requestOptions);
   try { requireThat(response.status() === 401); } finally { await response.dispose(); }
 }

@@ -37,13 +37,15 @@ are optional.
 3. After Apply succeeds, application installation continues on the VM.
    The demo URL may take longer to become available.
 4. Find **Owner setup secret** (`settings_secret_ocid`) in the Apply job's outputs.
-   Open that secret in OCI Vault, reveal its **CURRENT** contents and copy
-   `setup_code`.
-5. Open **Energy demo** (`application_origin`). Enter the setup code, choose
+   In the same region, open **Identity & Security → Secret Management**, select
+   your deployment compartment and open the secret matching that OCID. Select
+   **Versions**, then **⋮ → View Secret Contents** for the **CURRENT** version.
+   Enable decoded Base64 and copy only the value beside `setup_code`.
+5. Open **Energy demo** (`application_origin`). Enter that value in **Owner code**, choose
    your demo password and optionally add either, both or neither provider key.
    Select **Save setup**. Credentials are saved in Vault; never put them in Terraform
    variables. Keep the owner code private; presenters only need the demo password.
-6. Enter your password in **Launch code** and select **Start session**.
+6. Enter your **Demo password** and select **Sign in**.
 
 ## Run the lab
 
@@ -186,7 +188,7 @@ cd ..
 uv run --no-sync python -m energy_ai.web
 ```
 
-Open the printed URL and use the generated launch code. Set `DEMO_PASSWORD`
+Open the printed URL and use the generated demo password. Set `DEMO_PASSWORD`
 in the server environment to choose your own. The local server binds to
 `127.0.0.1`; use OCI deployment for public HTTPS.
 
