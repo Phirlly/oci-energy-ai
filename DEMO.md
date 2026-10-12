@@ -8,9 +8,10 @@ For an existing deployment, go straight to [Run the lab](#run-the-lab).
 **Preview:** the installer is published, but fresh Console installation is still
 being validated. This installs a fixed build in a new stack.
 
-The automatic image selection described below is a source update awaiting
-publication. The current README button still asks you to select a compatible
-Oracle Linux 9 platform image; keep that image selection for later applies.
+Automatic image selection and advanced model settings described below are source
+updates awaiting publication. The current README button still asks you to select
+a compatible Oracle Linux 9 platform image and uses fixed model choices; keep
+that image selection for later applies.
 
 Use **US East (Ashburn)** to match the verified OCI model region. You'll need:
 
@@ -125,6 +126,21 @@ image is retained automatically. This preview
 does not provide in-place upgrades or GitHub rollback for Console installations.
 
 ## Optional paths
+
+<details>
+<summary>Change the Console deployment's AI models</summary>
+
+Keep the defaults for the verified demo. If you need another model, select
+**Show advanced options** in the stack's variables and edit the provider's model
+ID under **AI models (optional)**. API keys stay in Vault.
+
+Apply the configuration change to restart the app with the selected models.
+The VM, saved credentials and public history remain; private sessions end.
+An accepted model ID does not establish provider access or compatibility.
+Run the public example with each changed provider to check it before presenting.
+Models must support the demo's tool calls and bill extraction output.
+
+</details>
 
 <details>
 <summary>Run locally or use your own interval readings</summary>

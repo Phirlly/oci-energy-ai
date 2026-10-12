@@ -41,7 +41,7 @@ locals {
       project    = oci_generative_ai_project.energy.id
       origin     = "https://${oci_apigateway_gateway.app[0].hostname}"
       secret_ids = { settings = oci_vault_secret.settings[0].id }
-      model_ids  = { oci = "google.gemini-2.5-flash", openai = "gpt-4.1-2025-04-14", anthropic = "claude-haiku-5-5" }
+      model_ids  = { oci = var.oci_model, openai = var.openai_model, anthropic = var.anthropic_model }
     }
   } : null
   instance_metadata = merge({

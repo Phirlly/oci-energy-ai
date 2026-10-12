@@ -1,3 +1,39 @@
+variable "show_advanced_options" {
+  description = "Display optional advanced settings in the Console form; no runtime effect."
+  type        = bool
+  default     = false
+  nullable    = false
+}
+variable "oci_model" {
+  description = "OCI model ID for Console installs. Access and tool/output compatibility must be verified."
+  type        = string
+  default     = "google.gemini-2.5-flash"
+  nullable    = false
+  validation {
+    condition     = can(regex("^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$", var.oci_model))
+    error_message = "OCI model ID must use 1–128 letters, digits, dots, underscores, colons or hyphens, starting with a letter or digit."
+  }
+}
+variable "openai_model" {
+  description = "OpenAI model ID for Console installs. Access and tool/output compatibility must be verified."
+  type        = string
+  default     = "gpt-4.1-2025-04-14"
+  nullable    = false
+  validation {
+    condition     = can(regex("^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$", var.openai_model))
+    error_message = "OpenAI model ID must use 1–128 letters, digits, dots, underscores, colons or hyphens, starting with a letter or digit."
+  }
+}
+variable "anthropic_model" {
+  description = "Anthropic model ID for Console installs. Access and tool/output compatibility must be verified."
+  type        = string
+  default     = "claude-haiku-5-5"
+  nullable    = false
+  validation {
+    condition     = can(regex("^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$", var.anthropic_model))
+    error_message = "Anthropic model ID must use 1–128 letters, digits, dots, underscores, colons or hyphens, starting with a letter or digit."
+  }
+}
 variable "console_install" {
   description = "Native Console mode. Use the checked Console ZIP for a fresh stack."
   type        = bool

@@ -46,7 +46,12 @@ def check(path):
                     helper_digest, 'us-ashburn-1')
                 manifest = json.loads(installation.manifest)
                 assert manifest['runtime']['backend_host'] == '10.40.1.10:8080'
-                assert manifest['runtime']['model_ids']['openai'] == 'gpt-4.1-2025-04-14'
+                custom = event.get('@testrun') in ('configured_models', 'configured_models_repeat')
+                expected_models = ({'oci': 'oci.fixture:2', 'openai': 'openai_fixture-2',
+                                    'anthropic': 'anthropic-fixture-2'} if custom else {
+                    'oci': 'google.gemini-2.5-flash', 'openai': 'gpt-4.1-2025-04-14',
+                    'anthropic': 'claude-haiku-5-5'})
+                assert manifest['runtime']['model_ids'] == expected_models
                 assert set(manifest['runtime']['secret_ids']) == {'settings'}
                 assert len(json.dumps(metadata).encode()) < 32000
                 count += 1

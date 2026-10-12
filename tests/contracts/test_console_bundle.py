@@ -91,6 +91,21 @@ class ConsoleBundleTests(unittest.TestCase):
 
 
 class ConsoleSchemaTests(unittest.TestCase):
+    def test_model_settings_are_optional_bounded_and_behind_advanced_controls(self):
+        schema = json.loads((Path(__file__).resolve().parents[2] / 'infra/terraform/schema.yaml').read_text())
+        variables = schema['variables']
+        self.assertEqual(variables['show_advanced_options']['type'], 'boolean')
+        self.assertFalse(variables['show_advanced_options']['default'])
+        group = next(group for group in schema['variableGroups'] if '${oci_model}' in group['variables'])
+        self.assertEqual(group['visible'], '${show_advanced_options}')
+        for name, default in (('oci_model', 'google.gemini-2.5-flash'),
+                              ('openai_model', 'gpt-4.1-2025-04-14'),
+                              ('anthropic_model', 'claude-haiku-5-5')):
+            with self.subTest(name=name):
+                self.assertEqual(variables[name]['default'], default)
+                self.assertFalse(variables[name].get('required', False))
+                self.assertEqual(variables[name]['pattern'], '^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$')
+
     def test_guided_inputs_use_native_selectors_without_credential_fields(self):
         path = Path(__file__).resolve().parents[2] / 'infra/terraform/schema.yaml'
         schema = json.loads(path.read_text())

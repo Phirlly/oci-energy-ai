@@ -159,6 +159,34 @@ class VaultRuntimeTests(unittest.TestCase):
 
 
 class HostedProviderTests(unittest.IsolatedAsyncioTestCase):
+    async def test_console_model_changes_preserve_saved_credentials_and_route_all_choices(self):
+        from energy_ai.web.hosted_setup import HostedSetup
+        from energy_ai.web.setup_secrets import SetupSecrets
+        models = {'oci': 'oci.fixture:2', 'openai': 'openai_fixture-2', 'anthropic': 'anthropic-fixture-2'}
+        keys = {'openai': 'fixture-openai-key', 'anthropic': 'fixture-anthropic-key'}
+        vault = MemoryVault({'version': 1, 'password': 'admin', 'keys': keys})
+        config = HostedConfiguration.from_bytes(json.dumps(SETTINGS_CONFIG | {'model_ids': models}).encode())
+        runtime = HostedSetup(config, MagicMock(), SetupSecrets(vault, vault, SECRET))
+        self.addCleanup(runtime.close)
+        self.assertFalse(runtime.required)
+        self.assertEqual(runtime.password, 'admin')
+        self.assertEqual(runtime.models, models)
+        self.assertEqual(runtime.keys, keys)
+        calls = {}
+        @asynccontextmanager
+        async def model(provider, **options):
+            calls[provider] = options
+            yield object()
+        with patch('energy_ai.web.hosted_runtime.open_model', model):
+            for provider in runtime.providers:
+                async with runtime.model(provider):
+                    pass
+        self.assertEqual({provider: options['model_id'] for provider, options in calls.items()}, models)
+        self.assertIs(calls['oci']['oci_auth'], runtime.auth)
+        for provider, key in keys.items():
+            self.assertEqual(calls[provider]['api_key'], key)
+        self.assertEqual(vault.writes, [])
+
     async def test_runtime_passes_only_explicit_identity_and_selected_vault_key(self):
         config = HostedConfiguration.from_bytes(json.dumps(CONFIG | {'secret_ids': {
             'demo_password': SECRET, 'openai': SECRET[:-1] + 'c', 'anthropic': SECRET[:-1] + 'd'}}).encode())

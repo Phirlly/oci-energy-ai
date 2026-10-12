@@ -13,7 +13,17 @@
       "variables": [
         "${deployment_id}",
         "${compartment_ocid}",
-        "${availability_domain}"
+        "${availability_domain}",
+        "${show_advanced_options}"
+      ]
+    },
+    {
+      "title": "AI models (optional)",
+      "visible": "${show_advanced_options}",
+      "variables": [
+        "${oci_model}",
+        "${openai_model}",
+        "${anthropic_model}"
       ]
     },
     {
@@ -175,6 +185,32 @@
       "type": "string",
       "actualName": "image_ocid",
       "visible": false
+    },
+    "show_advanced_options": {
+      "type": "boolean",
+      "title": "Show advanced options",
+      "default": false
+    },
+    "oci_model": {
+      "type": "string",
+      "title": "OCI model",
+      "description": "Keep the default unless you have verified access and compatibility with this demo. This is a model ID, not an API key.",
+      "default": "google.gemini-2.5-flash",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+    },
+    "openai_model": {
+      "type": "string",
+      "title": "OpenAI model",
+      "description": "Keep the default unless you have verified access and compatibility with this demo. This is a model ID, not an API key.",
+      "default": "gpt-4.1-2025-04-14",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+    },
+    "anthropic_model": {
+      "type": "string",
+      "title": "Anthropic model",
+      "description": "Keep the default unless you have verified access and compatibility with this demo. This is a model ID, not an API key.",
+      "default": "claude-haiku-5-5",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
     }
   },
   "outputs": {

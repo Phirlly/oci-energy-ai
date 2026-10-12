@@ -3,8 +3,9 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
+from infra.terraform.host.activation import Activator
 from infra.terraform.host.console_contract import parse_installation
 from infra.terraform.host.console_install import ConsoleInstaller
 from infra.terraform.host.contracts import HostError
@@ -59,6 +60,33 @@ class ConsoleInstallationTests(unittest.TestCase):
         self.assertEqual(self.installer.run(self.desired), "installed")
         self.assertEqual(self.activator.mock_calls, [])
         self.runner.assert_not_called()
+
+    def test_model_only_change_restarts_same_image_once_then_repeat_is_idle(self):
+        raw, _ = installation()
+        value = json.loads(raw)
+        value["manifest"]["runtime"]["model_ids"] = {"oci": "configured-model"}
+        changed = parse_installation(json.dumps(value).encode(), VNIC_CONTENT, HOST_DIGEST, "us-ashburn-1")
+        self.assertNotEqual(changed.target, self.desired.target)
+        self.assertNotEqual(changed.digest, self.desired.digest)
+        self.assertEqual(json.loads(changed.manifest)["image_id"], json.loads(self.desired.manifest)["image_id"])
+        manifests = {item.digest: item.manifest for item in (self.desired, changed)}
+        service, artifacts = Mock(), Mock()
+        artifacts.prepare.side_effect = lambda digest: self.state.save_release(digest, manifests[digest])
+        installer = ConsoleInstaller(self.state, Activator(self.state, service, artifacts),
+                                     self.config, runner=self.runner)
+        installer.run(self.desired)
+        service.reset_mock()
+        self.runner.reset_mock()
+        installer.run(changed)
+        self.assertEqual(service.mock_calls, [call.stop(), call.start(), call.health(json.loads(changed.manifest))])
+        self.assertEqual(self.state.read(), {"version": 1, "current": changed.digest, "previous": self.desired.digest})
+        self.assertEqual(self.record()["attempts"], 1)
+        self.runner.assert_not_called()
+        service.reset_mock()
+        artifacts.reset_mock()
+        installer.run(changed)
+        self.assertEqual(service.mock_calls, [])
+        self.assertEqual(artifacts.mock_calls, [])
 
     def test_failure_and_process_recreation_preserve_budget_and_repair_bootstrap_marker(self):
         (self.config / "failed").touch()
