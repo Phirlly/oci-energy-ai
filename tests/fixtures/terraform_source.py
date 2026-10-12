@@ -2,7 +2,7 @@ from pathlib import Path
 
 
 EXPECTED_MEMBERS = (
-    ".terraform.lock.hcl", "compute.tf", "console.tf", "console_variables.tf", "gateway.tf", "locals.tf", "network.tf", "network_access.tf",
+    ".terraform.lock.hcl", "compute.tf", "console.tf", "console_images.tf", "console_variables.tf", "gateway.tf", "locals.tf", "network.tf", "network_access.tf",
     "outputs.tf", "project.tf", "providers.tf", "runtime_identity.tf", "storage.tf", "variables.tf",
     "settings.tf", "vault.tf", "versions.tf",
     "host/__init__.py", "host/activation.py", "host/artifacts.py", "host/bootstrap.sh",

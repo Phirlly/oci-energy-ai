@@ -54,7 +54,7 @@ run "reject_wrong_operating_system" {
     target = data.oci_core_image.console[0]
     values = { operating_system = "Other Linux", operating_system_version = "9.8", state = "AVAILABLE" }
   }
-  expect_failures = [data.oci_core_image.console]
+  expect_failures = [oci_core_instance.app]
 }
 run "reject_wrong_major_version" {
   command = plan
@@ -62,7 +62,7 @@ run "reject_wrong_major_version" {
     target = data.oci_core_image.console[0]
     values = { operating_system = "Oracle Linux", operating_system_version = "8.10", state = "AVAILABLE" }
   }
-  expect_failures = [data.oci_core_image.console]
+  expect_failures = [oci_core_instance.app]
 }
 run "reject_unavailable_image" {
   command = plan
@@ -70,7 +70,7 @@ run "reject_unavailable_image" {
     target = data.oci_core_image.console[0]
     values = { operating_system = "Oracle Linux", operating_system_version = "9.8", state = "DISABLED" }
   }
-  expect_failures = [data.oci_core_image.console]
+  expect_failures = [oci_core_instance.app]
 }
 run "reject_incompatible_shape" {
   command = plan
@@ -78,7 +78,7 @@ run "reject_incompatible_shape" {
     target = data.oci_core_shapes.console[0]
     values = { shapes = [] }
   }
-  expect_failures = [data.oci_core_shapes.console]
+  expect_failures = [oci_core_instance.app]
 }
 run "reject_unready_home_region" {
   command = plan
@@ -87,4 +87,46 @@ run "reject_unready_home_region" {
     values = { region_subscriptions = [{ is_home_region = true, region_name = "us-phoenix-1", state = "IN_PROGRESS" }] }
   }
   expect_failures = [data.oci_identity_region_subscriptions.console]
+}
+
+run "reject_custom_image_with_matching_os" {
+  command = plan
+  override_data {
+    target = data.oci_core_image.console[0]
+    values = { operating_system = "Oracle Linux", operating_system_version = "9.8", state = "AVAILABLE", compartment_id = "ocid1.compartment.oc1..aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
+  }
+  expect_failures = [oci_core_instance.app]
+}
+
+run "reject_empty_initial_catalog" {
+  command = plan
+  variables { image_ocid = null }
+  override_data {
+    target = data.oci_core_images.console[0]
+    values = { images = [] }
+  }
+  expect_failures = [terraform_data.console_image]
+}
+run "reject_catalog_with_only_ineligible_images" {
+  command = plan
+  variables { image_ocid = null }
+  override_data {
+    target = data.oci_core_images.console[0]
+    values = { images = [
+      { id = "ocid1.image.oc1.iad.dddddddddddddddddddddddddddddddd", operating_system = "Oracle Linux", operating_system_version = "9", state = "AVAILABLE", compartment_id = "ocid1.compartment.oc1..aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+      { id = "ocid1.image.oc1.iad.eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", operating_system = "Oracle Linux", operating_system_version = "8.10", state = "AVAILABLE", compartment_id = "" }
+    ] }
+  }
+  expect_failures = [terraform_data.console_image]
+}
+run "accept_manual_platform_image_with_null_compartment" {
+  command = plan
+  override_data {
+    target = data.oci_core_image.console[0]
+    values = { operating_system = "Oracle Linux", operating_system_version = "9", state = "AVAILABLE", compartment_id = null }
+  }
+  assert {
+    condition     = oci_core_instance.app[0].source_details[0].source_id == var.image_ocid && length(data.oci_core_images.console) == 0
+    error_message = "An explicit platform image need not be present in the recent-image catalog."
+  }
 }

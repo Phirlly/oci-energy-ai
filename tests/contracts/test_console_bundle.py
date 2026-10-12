@@ -98,10 +98,12 @@ class ConsoleSchemaTests(unittest.TestCase):
         self.assertEqual(schema['schemaVersion'], '1.1.0')
         self.assertEqual(variables['compartment_ocid']['type'], 'oci:identity:compartment:id')
         self.assertEqual(variables['availability_domain']['type'], 'oci:identity:availabilitydomain:name')
-        self.assertEqual(variables['image_ocid']['type'], 'oci:core:image:id')
-        self.assertEqual(variables['image_ocid']['dependsOn'],
-                         dict(compartmentId='${compartment_ocid}', shape='${instance_shape}',
-                              operatingSystem='${image_operating_system}'))
+        self.assertEqual(variables['image_ocid']['type'], 'string')
+        self.assertFalse(variables['image_ocid']['visible'])
+        self.assertFalse(variables['image_ocid'].get('required', False))
+        visible = [name for group in schema['variableGroups'] if group.get('visible', True)
+                   for name in group['variables']]
+        self.assertNotIn('${image_ocid}', visible)
         groups = [name.removeprefix('${').removesuffix('}')
                   for group in schema['variableGroups'] for name in group['variables']]
         attributes = {name for value in variables.values() if value['type'] == 'object'
@@ -128,7 +130,7 @@ class ConsoleSchemaTests(unittest.TestCase):
                 for value in attributes:
                     kind = 'integer' if value['actualName'] in {'version', 'image_bytes'} else 'string'
                     self.assertEqual(value['type'], kind)
-        self.assertEqual(variables['image_ocid']['type'], 'oci:core:image:id')
+        self.assertEqual(variables['image_ocid']['type'], 'string')
         self.assertEqual(variables['availability_domain']['type'], 'oci:identity:availabilitydomain:name')
 
     def test_every_output_has_the_required_type_including_hidden_outputs(self):

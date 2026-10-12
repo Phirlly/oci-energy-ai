@@ -8,6 +8,10 @@ For an existing deployment, go straight to [Run the lab](#run-the-lab).
 **Preview:** the installer is published, but fresh Console installation is still
 being validated. This installs a fixed build in a new stack.
 
+The automatic image selection described below is a source update awaiting
+publication. The current README button still asks you to select a compatible
+Oracle Linux 9 platform image; keep that image selection for later applies.
+
 Use **US East (Ashburn)** to match the verified OCI model region. You'll need:
 
 - An OCI compartment with service access and capacity.
@@ -23,8 +27,9 @@ are optional.
 1. Click [Deploy to Oracle Cloud in the README](README.md#deploy-on-oci).
    Sign in, select your region and compartment, review Oracle's terms and use
    Terraform **1.5.x**.
-2. Choose a **Deployment name** unique across your tenancy, an **Availability domain** and a compatible
-   **Oracle Linux 9 image**. Leave **Installer retry generation** at `0`.
+2. Choose a **Deployment name** unique across your tenancy and an **Availability domain**.
+   A compatible Oracle Linux 9 platform image is selected automatically and saved
+   for this stack. Leave **Installer retry generation** at `0`.
    On the review page, keep **Run apply** selected and choose **Create**.
 3. After Apply succeeds, application installation continues on the VM.
    The demo URL may take longer to become available.
@@ -115,7 +120,8 @@ Resource Manager stack. This deletes demo resources and public history; Vault
 deletion follows OCI waiting periods. The empty stack record and shared public
 installer files remain.
 
-Keep the saved region, compartment, image and availability domain. This preview
+Keep the saved region, compartment and availability domain. The selected host
+image is retained automatically. This preview
 does not provide in-place upgrades or GitHub rollback for Console installations.
 
 ## Optional paths

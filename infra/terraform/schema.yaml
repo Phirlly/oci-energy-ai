@@ -13,8 +13,7 @@
       "variables": [
         "${deployment_id}",
         "${compartment_ocid}",
-        "${availability_domain}",
-        "${image_ocid}"
+        "${availability_domain}"
       ]
     },
     {
@@ -33,7 +32,8 @@
         "${console_release}",
         "${application}",
         "${instance_shape}",
-        "${image_operating_system}"
+        "${image_operating_system}",
+        "${image_ocid}"
       ]
     }
   ],
@@ -61,15 +61,9 @@
       }
     },
     "image_ocid": {
-      "type": "oci:core:image:id",
-      "title": "Oracle Linux 9 image",
-      "description": "Choose an Oracle Linux 9 platform image. Keep this selection for later applies.",
-      "required": true,
-      "dependsOn": {
-        "compartmentId": "${compartment_ocid}",
-        "shape": "${instance_shape}",
-        "operatingSystem": "${image_operating_system}"
-      }
+      "type": "string",
+      "visible": false,
+      "description": "A compatible Oracle Linux 9 platform image is selected automatically and retained for this stack."
     },
     "install_generation": {
       "type": "integer",

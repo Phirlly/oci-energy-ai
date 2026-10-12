@@ -16,6 +16,10 @@ variables {
 run "foundation_has_no_application_resources" {
   command = plan
   assert {
+    condition     = length(terraform_data.console_image) == 0 && length(data.oci_core_images.console) == 0 && length(data.oci_core_image.console) == 0
+    error_message = "Foundation deployment must not select or read a Console image."
+  }
+  assert {
     condition     = length(oci_core_instance.app) == 0 && length(oci_core_vcn.app) == 0 && length(oci_kms_vault.app) == 0 && length(oci_apigateway_gateway.app) == 0 && length(oci_identity_dynamic_group.app) == 0
     error_message = "Foundation operation must not create hosting resources."
   }
@@ -23,6 +27,10 @@ run "foundation_has_no_application_resources" {
 
 run "private_host_with_https_gateway_and_instance_identity" {
   command = apply
+  assert {
+    condition     = length(terraform_data.console_image) == 0 && length(data.oci_core_images.console) == 0 && length(data.oci_core_image.console) == 0 && oci_core_instance.app[0].source_details[0].source_id == var.application.image_ocid
+    error_message = "GitHub topology remains independently pinned and must not query Console images."
+  }
   variables {
     application = {
       version             = 1

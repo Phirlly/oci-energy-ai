@@ -23,7 +23,7 @@ variable "availability_domain" {
   }
 }
 variable "image_ocid" {
-  description = "Saved Oracle Linux 9 image compatible with VM.Standard.E5.Flex."
+  description = "Optional platform image override for a fresh stack; normally selected automatically and retained."
   type        = string
   default     = null
   validation {

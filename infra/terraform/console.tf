@@ -12,37 +12,6 @@ data "oci_identity_region_subscriptions" "console" {
     }
   }
 }
-data "oci_core_image" "console" {
-  count    = var.console_install ? 1 : 0
-  image_id = var.image_ocid
-  lifecycle {
-    precondition {
-      condition     = var.image_ocid != null
-      error_message = "Select an Oracle Linux 9 image."
-    }
-    postcondition {
-      condition     = self.operating_system == "Oracle Linux" && can(regex("^9(\\.|$)", self.operating_system_version)) && self.state == "AVAILABLE"
-      error_message = "The selected image must be an available Oracle Linux 9 image."
-    }
-  }
-}
-data "oci_core_shapes" "console" {
-  count               = var.console_install ? 1 : 0
-  compartment_id      = var.compartment_ocid
-  availability_domain = var.availability_domain
-  image_id            = var.image_ocid
-  shape               = "VM.Standard.E5.Flex"
-  lifecycle {
-    precondition {
-      condition     = var.availability_domain != null && var.image_ocid != null
-      error_message = "Select the host availability domain and image."
-    }
-    postcondition {
-      condition     = anytrue([for item in self.shapes : item.name == "VM.Standard.E5.Flex" && item.is_flexible])
-      error_message = "The selected image/domain must support VM.Standard.E5.Flex."
-    }
-  }
-}
 locals {
   console_home_region = var.console_install ? try(one([for item in data.oci_identity_region_subscriptions.console[0].region_subscriptions : item.region_name if item.is_home_region && item.state == "READY"]), var.region) : var.region
   application = var.console_install ? {
@@ -50,7 +19,7 @@ locals {
     tenancy_ocid        = var.tenancy_ocid
     home_region         = local.console_home_region
     availability_domain = var.availability_domain
-    image_ocid          = var.image_ocid
+    image_ocid          = local.console_selected_image
   } : var.application
   console_topology = var.console_install ? {
     deployment_id    = var.deployment_id

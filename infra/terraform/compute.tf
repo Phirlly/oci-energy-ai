@@ -71,6 +71,19 @@ resource "oci_core_instance" "app" {
   metadata = local.instance_metadata
   lifecycle {
     precondition {
+      condition = var.console_install ? (
+        data.oci_core_image.console[0].operating_system == "Oracle Linux" &&
+        can(regex("^9(\\.|$)", data.oci_core_image.console[0].operating_system_version)) &&
+        data.oci_core_image.console[0].state == "AVAILABLE" &&
+        (data.oci_core_image.console[0].compartment_id == null || data.oci_core_image.console[0].compartment_id == "")
+      ) : true
+      error_message = "The host image must be an available Oracle Linux 9 platform image; custom images are not supported."
+    }
+    precondition {
+      condition     = var.console_install ? anytrue([for item in data.oci_core_shapes.console[0].shapes : item.name == "VM.Standard.E5.Flex" && item.is_flexible]) : true
+      error_message = "The selected image and availability domain must support VM.Standard.E5.Flex."
+    }
+    precondition {
       condition     = length(jsonencode(local.instance_metadata)) < 32000
       error_message = "Host metadata exceeds OCI's combined 32,000-byte limit."
     }

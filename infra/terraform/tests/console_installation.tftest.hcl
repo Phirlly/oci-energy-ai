@@ -86,7 +86,7 @@ run "unchanged_reapply_retains_installation_and_settings" {
 run "reject_image_replacement" {
   command = plan
   variables { image_ocid = "ocid1.image.oc1.iad.dddddddddddddddddddddddddddddddd" }
-  expect_failures = [oci_core_instance.app]
+  expect_failures = [terraform_data.console_image]
 }
 run "reject_ad_replacement" {
   command = plan
@@ -109,5 +109,18 @@ run "explicit_retry_generation_preserves_topology" {
   assert {
     condition     = oci_core_instance.app[0].id == run.first_install_has_private_runtime_and_exact_settings_permissions.instance_ocid && jsondecode(oci_core_instance.app[0].metadata.energy_ai_install).generation == 1
     error_message = "A higher attempt budget must not replace the host."
+  }
+}
+
+run "clearing_manual_override_retains_saved_image" {
+  command = apply
+  variables { image_ocid = null }
+  override_data {
+    target = data.oci_core_images.console[0]
+    values = { images = [] }
+  }
+  assert {
+    condition     = oci_core_instance.app[0].source_details[0].source_id == "ocid1.image.oc1.iad.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" && output.instance_ocid == run.first_install_has_private_runtime_and_exact_settings_permissions.instance_ocid && output.settings_secret_ocid == run.first_install_has_private_runtime_and_exact_settings_permissions.settings_secret_ocid
+    error_message = "Clearing an optional override must retain the saved manual image and host."
   }
 }
