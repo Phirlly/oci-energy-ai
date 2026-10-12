@@ -91,13 +91,18 @@ class ConsoleBundleTests(unittest.TestCase):
 
 
 class ConsoleSchemaTests(unittest.TestCase):
-    def test_model_settings_are_optional_bounded_and_behind_advanced_controls(self):
+    def test_model_and_recovery_settings_are_behind_advanced_controls(self):
         schema = json.loads((Path(__file__).resolve().parents[2] / 'infra/terraform/schema.yaml').read_text())
         variables = schema['variables']
         self.assertEqual(variables['show_advanced_options']['type'], 'boolean')
         self.assertFalse(variables['show_advanced_options']['default'])
         group = next(group for group in schema['variableGroups'] if '${oci_model}' in group['variables'])
         self.assertEqual(group['visible'], '${show_advanced_options}')
+        recovery = next(group for group in schema['variableGroups'] if '${install_generation}' in group['variables'])
+        self.assertEqual(recovery['visible'], '${show_advanced_options}')
+        self.assertEqual(variables['install_generation']['default'], 0)
+        self.assertEqual((variables['install_generation']['minimum'],
+                          variables['install_generation']['maximum']), (0, 1000000))
         for name, default in (('oci_model', 'google.gemini-2.5-flash'),
                               ('openai_model', 'gpt-4.1-2025-04-14'),
                               ('anthropic_model', 'claude-haiku-5-5')):

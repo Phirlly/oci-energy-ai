@@ -8,7 +8,7 @@ For an existing deployment, go straight to [Run the lab](#run-the-lab).
 **Preview:** the installer is published, but fresh Console installation is still
 being validated. This installs a fixed build in a new stack.
 
-Automatic image selection and advanced model settings described below are source
+Automatic image selection and advanced settings described below are source
 updates awaiting publication. The current README button still asks you to select
 a compatible Oracle Linux 9 platform image and uses fixed model choices; keep
 that image selection for later applies.
@@ -30,7 +30,7 @@ are optional.
    Terraform **1.5.x**.
 2. Choose a **Deployment name** unique across your tenancy and an **Availability domain**.
    A compatible Oracle Linux 9 platform image is selected automatically and saved
-   for this stack. Leave **Installer retry generation** at `0`.
+   for this stack. You can leave **Show advanced options** unchecked.
    On the review page, keep **Run apply** selected and choose **Create**.
 3. After Apply succeeds, application installation continues on the VM.
    The demo URL may take longer to become available.
@@ -110,7 +110,10 @@ presenters for up to 7 days/100 runs and survives restarts.
 
 - **Apply fails:** inspect the job logs for permissions, service access or capacity.
 - **Demo stays unavailable:** inspect the VM's `oci-energy-ai-install` service.
-  Increase **Installer retry generation** only after fixing an exhausted installation.
+  After fixing an exhausted installation, enable **Show advanced options** in
+  the stack variables and increase **Installer retry generation** under
+  **Installation recovery**. Save the variables and run **Apply** to send the
+  change to the installer. Routine installation uses `0` automatically.
 - **AI fails or is unavailable:** check the provider's key, model access or quota.
   The prepared calculations and manual bill review still work.
 

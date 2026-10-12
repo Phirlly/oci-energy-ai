@@ -28,6 +28,7 @@
     },
     {
       "title": "Installation recovery",
+      "visible": "${show_advanced_options}",
       "variables": [
         "${install_generation}"
       ]
