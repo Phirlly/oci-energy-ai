@@ -3,7 +3,7 @@
 from oci.exceptions import ServiceError
 
 from deployment.application_configuration import ApplicationConfiguration, regional_identifier
-from deployment.configuration import DeploymentError
+from deployment.configuration import DeploymentError, validate_compartment_tenancy
 from deployment.resource_jobs import retry_token
 
 
@@ -30,6 +30,10 @@ class ApplicationResources:
             tags.get('application') == 'oci-energy-ai' and tags.get('deployment_id') == self.config.deployment_id)
 
     def topology(self, tenancy, environment, *, pinned=None):
+        try:
+            validate_compartment_tenancy(self.config.compartment_ocid, tenancy)
+        except ValueError:
+            raise DeploymentError('The root compartment must match the deployment tenancy.') from None
         subscriptions = list(self.deadline.pages(self.clients.identity.list_region_subscriptions, tenancy))
         ready = {item.region_name for item in subscriptions if item.status == 'READY'}
         home = [item.region_name for item in subscriptions if item.is_home_region and item.status == 'READY']

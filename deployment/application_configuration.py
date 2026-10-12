@@ -6,6 +6,8 @@ import re
 
 from oci.regions_definitions import REGION_REALMS, REGIONS_SHORT_NAMES
 
+from deployment.configuration import validate_compartment_tenancy
+
 
 def regional_identifier(value, kind, region):
     """Accept the selected OC1 region's long or short identifier only."""
@@ -72,4 +74,5 @@ def stack_application(variables, config):
         return None
     application = ApplicationConfiguration.from_json(variables["application"])
     application.validate_region(config.region)
+    validate_compartment_tenancy(config.compartment_ocid, application.tenancy_ocid)
     return application

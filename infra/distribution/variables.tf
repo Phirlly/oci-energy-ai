@@ -19,11 +19,11 @@ variable "region" {
 }
 
 variable "compartment_ocid" {
-  description = "Maintainer's compartment for public build distribution."
+  description = "Maintainer's OC1 root or child compartment for public build distribution."
   type        = string
   nullable    = false
   validation {
-    condition     = can(regex("^ocid1\\.compartment\\.oc1\\.\\.[a-z0-9]{20,255}$", var.compartment_ocid))
-    error_message = "compartment_ocid must identify an OC1 compartment."
+    condition     = can(regex("^ocid1\\.(compartment|tenancy)\\.oc1\\.\\.[a-z0-9]{20,255}$", var.compartment_ocid))
+    error_message = "compartment_ocid must identify an OC1 root or child compartment."
   }
 }

@@ -1,3 +1,4 @@
+from dataclasses import replace
 from types import SimpleNamespace as NS
 import unittest
 from unittest.mock import Mock
@@ -49,6 +50,14 @@ class ApplicationResourceFixture:
 
 
 class ApplicationResourceTests(ApplicationResourceFixture, unittest.TestCase):
+    def test_root_discovery_matches_tenancy_and_rejects_foreign_root_before_calls(self):
+        self.resources.config = replace(CONFIG, compartment_ocid=TENANCY)
+        self.assertEqual(self.resources.topology(TENANCY, {}).tenancy_ocid, TENANCY)
+        self.clients.reset_mock()
+        with self.assertRaisesRegex(DeploymentError, 'root compartment'):
+            self.resources.topology('ocid1.tenancy.oc1..' + 'f' * 32, {})
+        self.assertEqual(self.clients.mock_calls, [])
+
     def test_discovery_chooses_sorted_ad_and_platform_image_then_validates_compatibility(self):
         custom = NS(**(vars(self.image) | {'compartment_id': CONFIG.compartment_ocid, 'id': IMAGE+'custom'}))
         self.clients.compute.list_images.return_value = response([custom, self.image])

@@ -23,11 +23,17 @@ class DeploymentConfigurationTests(unittest.TestCase):
                 DeploymentConfiguration.from_mapping(value)
             self.assertNotIn("private-marker", str(error.exception))
 
+    def test_root_compartment_emits_the_same_three_terraform_inputs(self):
+        values = self.valid | {"compartment_ocid": "ocid1.tenancy.oc1.." + "a" * 32}
+        self.assertEqual(DeploymentConfiguration.from_mapping(values).terraform_variables(), values)
+
     def test_rejects_unsafe_or_ambiguous_identifiers(self):
         invalid = {
             "deployment_id": ("ab", "A-demo", "-demo", "demo-", "a" * 33, "x\ny", True),
             "region": ("", "US-ASHBURN-1", "us-ashburn-0", "../region", None),
-            "compartment_ocid": ("ocid1.tenancy.oc1.." + "a" * 32,
+            "compartment_ocid": ("ocid1.tenancy.oc2.." + "a" * 32,
+                                 "ocid1.user.oc1.." + "a" * 32,
+                                 "ocid1.tenancy.oc1.." + "a" * 32 + "\n",
                                  "ocid1.compartment.oc2.." + "a" * 32, "fake", 42),
         }
         for field, values in invalid.items():

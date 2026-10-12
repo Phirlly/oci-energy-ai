@@ -21,6 +21,15 @@ run "reject_unsafe_deployment_name" {
   expect_failures = [var.deployment_id]
 }
 
+run "root_foundation_targets_selected_root_without_hosting" {
+  command = plan
+  variables { compartment_ocid = "ocid1.tenancy.oc1..aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
+  assert {
+    condition     = oci_objectstorage_bucket.artifacts.compartment_id == var.compartment_ocid && oci_generative_ai_project.energy.compartment_id == var.compartment_ocid && length(oci_core_instance.app) == 0
+    error_message = "Root foundation must use the selected root and remain foundation-only."
+  }
+}
+
 run "reject_invalid_region" {
   command = plan
   variables { region = "us-ashburn-0" }

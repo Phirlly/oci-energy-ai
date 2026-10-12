@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import os
 import re
 
-from deployment.configuration import validate_deployment_value
+from deployment.configuration import validate_compartment_tenancy, validate_deployment_value
 from energy_ai.web.passwords import PASSWORD_GUIDANCE, valid_password
 
 
@@ -23,7 +23,7 @@ _IDENTITY_PATTERNS = {
 _VARIABLE_GUIDANCE = {
     "DEPLOYMENT_ID": "3-32 lowercase letters, digits or hyphens; start with a letter, end alphanumeric.",
     "OCI_REGION": "OCI commercial region name; availability is not checked.",
-    "OCI_COMPARTMENT_OCID": "OC1 compartment OCID, not a compartment name.",
+    "OCI_COMPARTMENT_OCID": "OC1 child compartment OCID or the root OCID matching OCI_TENANCY_OCID.",
     "OCI_TENANCY_OCID": "OC1 tenancy OCID for the deployment identity.",
     "OCI_USER_OCID": "OC1 user OCID for the deployment identity.",
     "OCI_FINGERPRINT": "16 colon-separated hexadecimal byte pairs.",
@@ -70,6 +70,8 @@ def check_deployment_setup(environment: Mapping[str, str], *, application=False)
         elif setting in _TERRAFORM_FIELDS:
             try:
                 validate_deployment_value(_TERRAFORM_FIELDS[setting], value)
+                if setting == "OCI_COMPARTMENT_OCID":
+                    validate_compartment_tenancy(value, environment.get("OCI_TENANCY_OCID"))
             except ValueError:
                 status = "invalid"
         elif not re.fullmatch(_IDENTITY_PATTERNS[setting], value):

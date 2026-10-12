@@ -103,6 +103,31 @@ class ApplicationStackTransitionTests(unittest.TestCase):
         self.client.update_stack.assert_called_once()
         self.client.create_job.assert_not_called()
 
+    def test_foreign_root_requested_topology_is_rejected_before_discovery_or_mutation(self):
+        root = replace(CONFIG, compartment_ocid=APPLICATION.tenancy_ocid)
+        manager = ResourceManager(self.client, root, REPOSITORY, "123-1")
+        foreign = replace(APPLICATION, tenancy_ocid="ocid1.tenancy.oc1.." + "f" * 32)
+        with self.assertRaisesRegex(DeploymentError, "Invalid application topology"):
+            manager.apply_application(b"archive", foreign)
+        self.client.list_stacks.assert_not_called()
+        self.assert_no_mutation()
+
+    def test_foreign_root_stored_topology_blocks_reads_apply_and_destroy(self):
+        root = replace(CONFIG, compartment_ocid=APPLICATION.tenancy_ocid)
+        manager = ResourceManager(self.client, root, REPOSITORY, "123-1")
+        foreign = replace(APPLICATION, tenancy_ocid="ocid1.tenancy.oc1.." + "f" * 32)
+        saved = stack(variables=root.terraform_variables() | {"application": foreign.to_json()})
+        saved.compartment_id = root.compartment_ocid
+        self.client.list_stacks.return_value = response([saved])
+        self.client.get_stack.return_value = response(saved, etag="root-etag")
+        for operation in (manager.application_configuration,
+                          lambda: manager.apply_application(b"archive", APPLICATION),
+                          lambda: manager.destroy_application(root.deployment_id, APPLICATION)):
+            with self.subTest(operation=operation), self.assertRaisesRegex(
+                    DeploymentError, "Stack configuration does not match"):
+                operation()
+            self.assert_no_mutation()
+
     def test_invalid_extended_state_is_never_accepted_for_read_or_mutation(self):
         for variables in (self.variables | {"unexpected": "private-marker"},
                           self.variables | {"application": "null"},

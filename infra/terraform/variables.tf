@@ -1,5 +1,5 @@
 variable "deployment_id" {
-  description = "Unique nonconfidential deployment name, 3-32 lowercase letters, digits or hyphens."
+  description = "Nonconfidential name unique across this tenancy, 3-32 lowercase letters, digits or hyphens."
   type        = string
   nullable    = false
   validation {
@@ -19,12 +19,12 @@ variable "region" {
 }
 
 variable "compartment_ocid" {
-  description = "Target compartment OCID in the OC1 commercial realm."
+  description = "Target OC1 child compartment or root tenancy OCID."
   type        = string
   nullable    = false
   validation {
-    condition     = can(regex("^ocid1\\.compartment\\.oc1\\.\\.[a-z0-9]{20,255}$", var.compartment_ocid))
-    error_message = "compartment_ocid must identify an OC1 compartment."
+    condition     = can(regex("^ocid1\\.(compartment|tenancy)\\.oc1\\.\\.[a-z0-9]{20,255}$", var.compartment_ocid))
+    error_message = "compartment_ocid must identify an OC1 root or child compartment."
   }
 }
 

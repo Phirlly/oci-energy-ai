@@ -28,6 +28,15 @@ run "reject_demo_identity" {
   expect_failures = [var.deployment_id]
 }
 
+run "root_publisher_targets_selected_root" {
+  command = plan
+  variables { compartment_ocid = "ocid1.tenancy.oc1..aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
+  assert {
+    condition     = oci_objectstorage_bucket.distribution.compartment_id == var.compartment_ocid && oci_objectstorage_bucket.distribution.access_type == "ObjectReadWithoutList"
+    error_message = "Root publication must retain explicit targeting and public asset access."
+  }
+}
+
 run "reject_noncommercial_region" {
   command = plan
   variables { region = "invalid" }

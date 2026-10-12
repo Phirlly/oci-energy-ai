@@ -23,7 +23,7 @@ are optional.
 1. Click [Deploy to Oracle Cloud in the README](README.md#deploy-on-oci).
    Sign in, select your region and compartment, review Oracle's terms and use
    Terraform **1.5.x**.
-2. Choose a unique **Deployment name**, an **Availability domain** and a compatible
+2. Choose a **Deployment name** unique across your tenancy, an **Availability domain** and a compatible
    **Oracle Linux 9 image**. Leave **Installer retry generation** at `0`.
    On the review page, keep **Run apply** selected and choose **Create**.
 3. After Apply succeeds, application installation continues on the VM.
@@ -174,7 +174,7 @@ a Console-created stack.
 
 | Setting | Type | Purpose |
 | --- | --- | --- |
-| `DEPLOYMENT_ID` | Variable | Unique 3–32 lowercase letters/digits/hyphens; starts with a letter, ends alphanumeric |
+| `DEPLOYMENT_ID` | Variable | Tenancy-wide unique name; 3–32 lowercase letters/digits/hyphens; starts with a letter, ends alphanumeric |
 | `OCI_REGION`, `OCI_COMPARTMENT_OCID` | Variables | Target region and compartment |
 | `OCI_TENANCY_OCID`, `OCI_USER_OCID`, `OCI_FINGERPRINT` | Variables | Registered deployment identity |
 | `OCI_PRIVATE_KEY` | Secret | Matching PEM signing key |

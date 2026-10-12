@@ -33,6 +33,16 @@ class DeploymentSetupTests(unittest.TestCase):
                 for name in names:
                     self.assertEqual(self.statuses(report)[name], "supplied_unverified")
 
+    def test_root_target_must_match_the_configured_tenancy_without_echoing_identifiers(self):
+        for target, accepted in ((self.environment["OCI_TENANCY_OCID"], True),
+                                 ("ocid1.tenancy.oc1.." + "f" * 32, False)):
+            with self.subTest(accepted=accepted):
+                report = check_deployment_setup(self.environment | {"OCI_COMPARTMENT_OCID": target})
+                self.assertEqual(report.complete, accepted)
+                self.assertEqual(self.statuses(report)["OCI_COMPARTMENT_OCID"],
+                                 "format_accepted" if accepted else "invalid")
+                self.assertNotIn(target, format_setup_report(report))
+
     def test_all_missing_required_settings_are_reported_together(self):
         report = check_deployment_setup({})
         self.assertFalse(report.complete)

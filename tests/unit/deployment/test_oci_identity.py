@@ -51,6 +51,15 @@ class DeploymentIdentityTests(unittest.TestCase):
 
     @patch("deployment.oci_identity.ResourceManagerClient")
     @patch("deployment.oci_identity.Signer")
+    def test_foreign_root_is_rejected_before_signing_or_cloud_client_creation(self, signer, client):
+        environment = configured_environment() | {"OCI_COMPARTMENT_OCID": "ocid1.tenancy.oc1.." + "f" * 32}
+        with self.assertRaisesRegex(DeploymentError, "configuration"):
+            resource_manager_client(environment)
+        signer.assert_not_called()
+        client.assert_not_called()
+
+    @patch("deployment.oci_identity.ResourceManagerClient")
+    @patch("deployment.oci_identity.Signer")
     def test_incomplete_configuration_fails_before_key_parse_or_client_creation(self, signer, client):
         with self.assertRaisesRegex(DeploymentError, "configuration"):
             resource_manager_client({})

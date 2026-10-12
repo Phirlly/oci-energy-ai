@@ -41,7 +41,7 @@
     "deployment_id": {
       "type": "string",
       "title": "Deployment name",
-      "description": "Unique name for this installation (3–32 lowercase letters, digits or hyphens).",
+      "description": "Name unique across this tenancy, including other compartments and regions (3–32 lowercase letters, digits or hyphens).",
       "default": "energy-demo",
       "required": true,
       "pattern": "^[a-z][a-z0-9-]{1,30}[a-z0-9]$"
@@ -49,6 +49,7 @@
     "compartment_ocid": {
       "type": "oci:identity:compartment:id",
       "title": "Compartment",
+      "description": "Choose a child compartment or the root of the signed-in tenancy.",
       "required": true
     },
     "availability_domain": {

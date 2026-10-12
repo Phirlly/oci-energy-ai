@@ -7,7 +7,7 @@ import time
 from oci.resource_manager import models
 
 from deployment.application_configuration import ApplicationConfiguration, stack_application
-from deployment.configuration import DeploymentError
+from deployment.configuration import DeploymentError, validate_compartment_tenancy
 from deployment.resource_jobs import OperationDeadline, ResourceJobs, resource_id, retry_token
 
 
@@ -156,6 +156,7 @@ class ResourceManager:
             if not isinstance(application, ApplicationConfiguration):
                 raise ValueError()
             application.validate_region(self.config.region)
+            validate_compartment_tenancy(self.config.compartment_ocid, application.tenancy_ocid)
         except ValueError:
             raise DeploymentError("Invalid application topology for this deployment.") from None
 

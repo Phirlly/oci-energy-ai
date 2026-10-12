@@ -11,7 +11,7 @@ class DeploymentError(Exception):
 _PATTERNS = {
     "deployment_id": r"[a-z][a-z0-9-]{1,30}[a-z0-9]",
     "region": r"[a-z]{2,3}-[a-z][a-z0-9-]{1,30}-[1-9][0-9]?",
-    "compartment_ocid": r"ocid1\.compartment\.oc1\.\.[a-z0-9]{20,255}",
+    "compartment_ocid": r"ocid1\.(?:compartment|tenancy)\.oc1\.\.[a-z0-9]{20,255}",
 }
 
 
@@ -21,6 +21,13 @@ def validate_deployment_value(name, value):
         raise ValueError("Unknown deployment input.")
     if not isinstance(value, str) or not re.fullmatch(_PATTERNS[name], value):
         raise ValueError(f"Invalid {name}; see deployment input requirements.")
+
+
+def validate_compartment_tenancy(compartment_ocid, tenancy_ocid):
+    """A root target must be the same tenancy as the deployment identity."""
+    validate_deployment_value("compartment_ocid", compartment_ocid)
+    if compartment_ocid.startswith("ocid1.tenancy.") and compartment_ocid != tenancy_ocid:
+        raise ValueError("The root compartment must match the deployment tenancy.")
 
 
 @dataclass(frozen=True)

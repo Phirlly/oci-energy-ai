@@ -99,5 +99,9 @@ resource "terraform_data" "installation" {
       condition     = !var.console_install || var.console_release != null
       error_message = "Use a checked Console ZIP with its pinned release."
     }
+    precondition {
+      condition     = local.application == null ? true : (!local.root_compartment || var.compartment_ocid == local.application.tenancy_ocid)
+      error_message = "The root compartment must match the selected deployment tenancy."
+    }
   }
 }
