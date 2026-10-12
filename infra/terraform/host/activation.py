@@ -24,13 +24,24 @@ class Activator:
                 self._restore(current)
         self.artifacts.prune()
 
-    def activate(self, digest):
+    def activate(self, digest, *, restart_current=True):
         if not digest_value(digest):
             raise HostError("Invalid release identifier.")
         with self.state.lock():
             self._reconcile()
             self.artifacts.prepare(digest)
-            self._activate(digest)
+            self._activate(digest, restart_current=restart_current)
+
+    def confirm_current(self, digest):
+        if not digest_value(digest):
+            raise HostError("Invalid release identifier.")
+        with self.state.lock():
+            if self.state.read()["current"] != digest or self.state.candidate() not in (None, digest):
+                return False
+            manifest = self.state.manifest(digest)
+            self.service.verify_image(manifest)
+            self.service.health(manifest)
+            return True
 
     def rollback(self):
         with self.state.lock():
@@ -41,12 +52,13 @@ class Activator:
             self.artifacts.verify(previous)
             self._activate(previous)
 
-    def _activate(self, digest):
+    def _activate(self, digest, *, restart_current=True):
         committed = self.state.read()
         manifest = self.state.manifest(digest)
         if committed["current"] == digest:
-            self.service.stop()
-            self.service.start()
+            if restart_current:
+                self.service.stop()
+                self.service.start()
             self.service.health(manifest)
             return
         # Stop must prove absence before publishing any new writer selection.

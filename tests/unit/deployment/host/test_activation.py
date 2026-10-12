@@ -61,6 +61,38 @@ class HostActivationTests(unittest.TestCase):
         ])
         self.assertEqual(self.state.read(), {"version": 1, "current": second, "previous": first})
 
+    def test_console_repeat_confirms_health_without_restart_and_retains_failure(self):
+        first = self.activate(1)
+        self.service.reset_mock()
+        self.activator.activate(first, restart_current=False)
+        self.assertEqual(self.service.mock_calls, [call.health(self.releases[0][2])])
+        self.service.health.side_effect = HostError("Not ready.")
+        with self.assertRaises(HostError):
+            self.activator.activate(first, restart_current=False)
+        self.service.stop.assert_not_called()
+        self.service.start.assert_not_called()
+
+    def test_commit_confirmation_never_prepares_or_changes_selection(self):
+        first = self.activate(1)
+        self.state.set_candidate(first)
+        self.service.reset_mock()
+        self.artifacts.reset_mock()
+        self.assertTrue(self.activator.confirm_current(first))
+        self.assertEqual(self.service.mock_calls, [call.verify_image(self.releases[0][2]),
+                                                   call.health(self.releases[0][2])])
+        self.assertEqual(self.artifacts.mock_calls, [])
+        self.assertEqual(self.state.candidate(), first)
+        for method in (self.service.verify_image, self.service.health):
+            method.side_effect = HostError("Invalid readiness.")
+            with self.assertRaises(HostError):
+                self.activator.confirm_current(first)
+            method.side_effect = None
+        self.state.set_candidate(self.releases[1][0])
+        self.service.reset_mock()
+        self.assertFalse(self.activator.confirm_current(first))
+        self.assertFalse(self.activator.confirm_current(self.releases[2][0]))
+        self.assertEqual(self.service.mock_calls, [])
+
     def test_failed_candidate_restores_committed_release_and_still_fails(self):
         first = self.activate(1)
         self.service.health.side_effect = [HostError("Not ready."), None]

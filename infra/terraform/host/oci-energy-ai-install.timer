@@ -1,0 +1,10 @@
+[Unit]
+Description=Retry bounded OCI Energy AI Console installation
+
+[Timer]
+OnBootSec=30s
+OnUnitInactiveSec=60s
+Unit=oci-energy-ai-install.service
+
+[Install]
+WantedBy=timers.target

@@ -34,6 +34,7 @@ jobs:
           python-version: '3.9'
       - run: python -B -m unittest discover -s tests/unit/deployment/host -t . -v
       - run: bash -n infra/terraform/host/bootstrap.sh
+      - run: systemd-analyze verify --man=no infra/terraform/host/oci-energy-ai-install.service infra/terraform/host/oci-energy-ai-install.timer
 
   python:
     runs-on: ubuntu-24.04

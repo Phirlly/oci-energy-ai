@@ -91,8 +91,10 @@ class ReleaseArtifactTests(unittest.TestCase):
 
     def test_helper_digest_matches_ordered_terraform_asset_formula(self):
         root = Path(__file__).resolve().parents[3]
-        names = ['__init__.py', 'activation.py', 'artifacts.py', 'bootstrap.sh', 'contracts.py',
-                 'control.py', 'entrypoint.py', 'oci-energy-ai.service', 'process.py', 'service.py',
+        names = ['__init__.py', 'activation.py', 'artifacts.py', 'bootstrap.sh',
+                 'console_contract.py', 'console_install.py', 'console_sources.py', 'contracts.py',
+                 'control.py', 'entrypoint.py', 'install_entry.py', 'oci-energy-ai-install.service',
+                 'oci-energy-ai-install.timer', 'oci-energy-ai.service', 'process.py', 'service.py',
                  'service_entry.py', 'state.py']
         expected = hashlib.sha256(''.join(hashlib.sha256((root/'infra/terraform/host'/name).read_bytes()).hexdigest()
                                           for name in names).encode()).hexdigest()

@@ -1,0 +1,13 @@
+[Unit]
+Description=OCI Energy AI Console installation
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+UMask=0077
+ExecStart=/usr/bin/python3 -EsB /opt/oci-energy-ai/host/install_entry.py
+TimeoutStartSec=2700
+TimeoutStopSec=30
+KillMode=control-group

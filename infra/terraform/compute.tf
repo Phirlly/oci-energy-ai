@@ -1,7 +1,9 @@
 locals {
   host_assets = [
-    "__init__.py", "activation.py", "artifacts.py", "bootstrap.sh", "contracts.py",
-    "control.py", "entrypoint.py", "oci-energy-ai.service", "process.py",
+    "__init__.py", "activation.py", "artifacts.py", "bootstrap.sh",
+    "console_contract.py", "console_install.py", "console_sources.py", "contracts.py",
+    "control.py", "entrypoint.py", "install_entry.py", "oci-energy-ai-install.service",
+    "oci-energy-ai-install.timer", "oci-energy-ai.service", "process.py",
     "service.py", "service_entry.py", "state.py",
   ]
   host_digest = sha256(join("", [for name in local.host_assets : filesha256("${path.module}/host/${name}")]))

@@ -23,3 +23,16 @@ def release(number=1):
     }
     payload = json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(payload).hexdigest(), payload, manifest, archive
+
+
+PUBLIC_BASE = "https://objectstorage.us-ashburn-1.oraclecloud.com/n/example/b/public-demo/o/"
+VNIC_CONTENT = b'[{"privateIp":"10.40.1.10","subnetCidrBlock":"10.40.1.0/24"}]'
+
+
+def installation(number=1, generation=0):
+    _, _, manifest, archive = release(number)
+    manifest["runtime"]["version"] = 2
+    manifest["runtime"]["secret_ids"] = {"settings": manifest["runtime"]["secret_ids"]["demo_password"]}
+    del manifest["runtime"]["backend_host"]
+    desired = {"version": 1, "generation": generation, "artifact_base": PUBLIC_BASE, "manifest": manifest}
+    return json.dumps(desired, sort_keys=True, separators=(",", ":")).encode(), archive

@@ -26,4 +26,5 @@ firewall-cmd --reload
 systemctl daemon-reload
 systemd-analyze verify /etc/systemd/system/oci-energy-ai.service
 systemctl enable oci-energy-ai.service
+rm -f /etc/oci-energy-ai/failed
 touch /etc/oci-energy-ai/ready
