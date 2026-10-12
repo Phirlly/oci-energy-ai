@@ -93,6 +93,14 @@ jobs:
           terraform_wrapper: false
       - run: terraform init -backend=false -input=false -lockfile=readonly
       - run: terraform validate -no-color
+      - name: Validate separate public distribution infrastructure
+        run: |
+          terraform -chdir=../distribution init -backend=false -input=false -lockfile=readonly
+          terraform -chdir=../distribution validate -no-color
+      - if: matrix.version == '1.16.4'
+        run: |
+          terraform -chdir=../distribution fmt -check -recursive
+          terraform -chdir=../distribution test -no-color
       - if: matrix.version == '1.16.4'
         run: terraform fmt -check -recursive
       - if: matrix.version == '1.16.4'

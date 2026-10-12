@@ -79,3 +79,9 @@ class DeliveryClients:
 
     def __exit__(self, *args):
         return self.cleanup.__exit__(*args)
+
+
+class DistributionClients(DeliveryClients):
+    """Publication needs only Resource Manager and the separate public bucket."""
+
+    SERVICES = dict(resource=ResourceManagerClient, storage=ObjectStorageClient)
