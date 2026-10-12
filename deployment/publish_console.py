@@ -40,7 +40,10 @@ def main(arguments=None, *, environment=None):
             manager = DistributionManager(clients.resource, config, repository, run_id,
                                           emit=lambda message: print(message, flush=True), timeout=1800)
             outputs = manager.provision(root, clients.storage)
-            result = publish_assets(root, *image, outputs, config.region, clients.storage, manager.deadline)
+            print('Distribution ready; preparing checked public assets.', flush=True)
+            result = publish_assets(root, *image, outputs, config.region, clients.storage, manager.deadline,
+                                    emit=lambda message: print(message, flush=True))
+        print('Public installer publication verified.', flush=True)
         content = json.dumps(result, indent=2, sort_keys=True)
         print(content)
         if environment.get('GITHUB_STEP_SUMMARY'):

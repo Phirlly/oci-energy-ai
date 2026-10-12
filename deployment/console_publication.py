@@ -23,7 +23,8 @@ class PublicArtifacts(ImmutableObjects):
         self._put(name, stream, size, checksum)
 
 
-def publish_assets(root, archive, image_id, release, outputs, region, client, deadline):
+def publish_assets(root, archive, image_id, release, outputs, region, client, deadline, *, emit=lambda message: None):
+    emit('Preparing checked public package.')
     namespace, bucket = outputs['object_storage_namespace'], outputs['artifact_bucket_name']
     base = f'https://objectstorage.{region}.oraclecloud.com/n/{namespace}/b/{bucket}/o/'
     archive = Path(archive)
@@ -33,15 +34,17 @@ def publish_assets(root, archive, image_id, release, outputs, region, client, de
     descriptor = dict(artifact_base=base, release=release, host_digest=helper, image_id=image_id,
                       image_sha256=checksum, image_bytes=archive.stat().st_size)
     validate_release(descriptor, helper)
-    store = PublicArtifacts(client, namespace, bucket, deadline)
+    store = PublicArtifacts(client, namespace, bucket, deadline, emit=emit)
     with tempfile.TemporaryDirectory() as directory:
         template = Path(directory)/'console.zip'
         digest = build_console_bundle(root, template, descriptor)
         if template.stat().st_size > 2**20:
             raise DeploymentError('Console template exceeds the public package size limit.')
+        emit('Verifying checked image publication.')
         with archive.open('rb') as stream:
             store.put(f'images/{checksum}.tar', stream, descriptor['image_bytes'], checksum)
         name = f'templates/{digest}.zip'
+        emit('Verifying Console template publication.')
         with template.open('rb') as stream:
             store.put(name, stream, template.stat().st_size, digest)
     return dict(release=release, image_sha256=checksum, template_sha256=digest,

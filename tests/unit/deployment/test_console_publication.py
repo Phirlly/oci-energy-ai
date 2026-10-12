@@ -61,6 +61,56 @@ class PublicArtifactTests(unittest.TestCase):
         self.assertEqual(self.client.get_object.call_args.kwargs, {'if_match': 'guard'})
         stream.close.assert_called_once()
 
+    def test_upload_stops_before_another_read_after_deadline_without_closing_source(self):
+        now, source = [0], BytesIO(self.payload)
+        self.store.deadline = OperationDeadline(60, lambda: now[0], lambda _: None)
+        self.client.head_object.side_effect = ServiceError(404, 'NotFound', {}, '')
+        def consume(*args, **kwargs):
+            body = args[3]
+            self.assertEqual(body.read(1), self.payload[:1])
+            now[0] = 60
+            body.read(1)
+        self.client.put_object.side_effect = consume
+        with self.assertRaisesRegex(DeploymentError, 'deadline'):
+            self.store.put(f'images/{self.digest}.tar', source, len(self.payload), self.digest)
+        self.assertEqual(source.tell(), 1)
+        self.assertFalse(source.closed)
+        self.client.put_object.assert_called_once()
+
+    def test_expiry_during_read_does_not_supply_late_bytes_to_transport(self):
+        now, supplied = [0], []
+        class SlowSource(BytesIO):
+            def read(self, size=-1):
+                result = super().read(size)
+                now[0] = 60
+                return result
+        source = SlowSource(self.payload)
+        self.store.deadline = OperationDeadline(60, lambda: now[0], lambda _: None)
+        self.client.head_object.side_effect = ServiceError(404, 'NotFound', {}, '')
+        self.client.put_object.side_effect = lambda *args, **kwargs: supplied.append(args[3].read(1))
+        with self.assertRaisesRegex(DeploymentError, 'deadline'):
+            self.store.put(f'images/{self.digest}.tar', source, len(self.payload), self.digest)
+        self.assertEqual(supplied, [])
+        self.assertFalse(source.closed)
+
+    def test_progress_is_bounded_byte_counts_and_success_requires_checksum(self):
+        payload = b'x' * (33 * 1024 * 1024)
+        digest, messages = hashlib.sha256(payload).hexdigest(), []
+        store = PublicArtifacts(self.client, 'fixture', 'public-builds', self.deadline, emit=messages.append)
+        head = response(None, **{'content-length': str(len(payload)), 'etag': 'guard',
+                                'opc-content-sha256': 'wrong-checksum'})
+        self.client.head_object.side_effect = [ServiceError(404, 'NotFound', {}, ''), head]
+        def consume(*args, **kwargs):
+            while args[3].read(1024 * 1024):
+                pass
+        self.client.put_object.side_effect = consume
+        with self.assertRaisesRegex(DeploymentError, 'collision'):
+            store.put(f'images/{digest}.tar', BytesIO(payload), len(payload), digest)
+        self.assertEqual(messages, [
+            f'Artifact bytes supplied to transport: {32 * 1024 * 1024}/{len(payload)}.',
+            f'Artifact bytes supplied to transport: {len(payload)}/{len(payload)}.',
+        ])
+
 
 class ConsolePublicationTests(unittest.TestCase):
     def test_image_descriptor_and_generated_package_match_only_checked_public_inputs(self):
@@ -82,7 +132,12 @@ class ConsolePublicationTests(unittest.TestCase):
             args = (ROOT, image, 'sha256:'+'b'*64, 'a'*40,
                     {'artifact_bucket_name': 'public-builds', 'object_storage_namespace': 'fixture'},
                     'us-ashburn-1', storage, deadline)
-            first = publish_assets(*args)
+            messages = []
+            first = publish_assets(*args, emit=messages.append)
+            self.assertEqual([message for message in messages if not message.startswith('Artifact bytes')], [
+                'Preparing checked public package.', 'Verifying checked image publication.',
+                'Verifying Console template publication.',
+            ])
             self.assertEqual(first, publish_assets(*args))
             self.assertEqual(storage.put_object.call_count, 2)
             self.assertEqual(len(objects), 2)
