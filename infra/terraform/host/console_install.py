@@ -11,7 +11,7 @@ from .artifacts import ArtifactStore
 from .console_contract import parse_installation
 from .console_sources import ConsoleDownload, MetadataSource
 from .contracts import HostError, bounded_json, digest_value
-from .control import CONFIG_PATH, RUN_ROOT, STATE_ROOT, load_host_configuration
+from .control import CONFIG_PATH, RUN_ROOT, STATE_ROOT, bootstrap_error, load_host_configuration
 from .process import run_command
 from .service import HostService
 from .state import HostState, atomic_write
@@ -71,15 +71,21 @@ class ConsoleInstaller:
             if confirmed:
                 self._write(dict(record, complete=True))
                 return "installed"
+        ready, failed = self.config_directory / "ready", self.config_directory / "failed"
         if record["attempts"] >= 12:
-            raise HostError("Installer attempts exhausted; resolve the cause and increase the retry generation.")
+            detail = str(bootstrap_error(self.config_directory)) if not ready.is_file() or failed.exists() else (
+                "Inspect the preceding installer errors.")
+            raise HostError("Installer attempts exhausted. " + detail +
+                            " Resolve the cause and increase the retry generation.")
         record["attempts"] += 1
         self._write(record)  # Reserve durably before any package or application operation.
-        ready, failed = self.config_directory / "ready", self.config_directory / "failed"
         if not ready.is_file() or failed.exists():
-            self.runner(["/bin/bash", "/opt/oci-energy-ai/host/bootstrap.sh"], timeout=1900)
+            try:
+                self.runner(["/bin/bash", "/opt/oci-energy-ai/host/bootstrap.sh"], timeout=1900)
+            except HostError:
+                raise bootstrap_error(self.config_directory) from None
         if not ready.is_file() or failed.exists():
-            raise HostError("Host packages and service configuration are not ready.")
+            raise bootstrap_error(self.config_directory)
         self.activator.activate(desired.digest, restart_current=False)
         self._write(dict(record, complete=True))
         return "installed"

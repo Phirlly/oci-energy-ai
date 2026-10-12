@@ -18,6 +18,27 @@ STATE_ROOT = Path("/var/lib/oci-energy-ai")
 RUN_ROOT = Path("/run/oci-energy-ai")
 
 
+def bootstrap_error(directory):
+    guidance = {
+        b"packages": ("packages", "Check package repositories and outbound network access."),
+        b"cli-repository": ("cli-repository", "Check availability of the Oracle Linux CLI repository."),
+        b"cli-install": ("cli-install", "Check availability of the OCI CLI package."),
+        b"runtime": ("runtime", "Check Python, OCI CLI and Podman installation and cgroup v2 support."),
+        b"permissions": ("permissions", "Check the ocarun agent account, directories and sudoers configuration."),
+        b"firewall": ("firewall", "Check firewalld startup and the demo's private ingress rule."),
+        b"service": ("service", "Check the demo's systemd unit validation and enablement."),
+    }
+    try:
+        with (Path(directory) / "bootstrap-stage").open("rb") as source:
+            selected = guidance.get(source.read(65))
+    except OSError:
+        selected = None
+    if selected:
+        stage, instruction = selected
+        return HostError("Host bootstrap stopped during " + stage + ". " + instruction)
+    return HostError("Host bootstrap failed or timed out; inspect cloud-init and installer readiness.")
+
+
 def load_host_configuration(path=CONFIG_PATH):
     try:
         with Path(path).open("rb") as source:
@@ -53,7 +74,7 @@ def main(arguments=None, *, config_path=CONFIG_PATH, root=STATE_ROOT, run=RUN_RO
         if config["version"] == 2 and operation in {"activate", "rollback"}:
             raise HostError("Use the Console installer to change this installation.")
         if (Path(config_path).parent / "failed").exists():
-            raise HostError("Host bootstrap failed; inspect cloud-init before retrying.")
+            raise bootstrap_error(Path(config_path).parent)
         if not (Path(config_path).parent / "ready").is_file():
             if operation == "status":
                 print(json.dumps({"version": 1, "status": "bootstrapping"}))

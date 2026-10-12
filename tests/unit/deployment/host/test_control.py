@@ -95,3 +95,12 @@ class FixedHostControlTests(unittest.TestCase):
         with patch("infra.terraform.host.control.HostState") as state, contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(main(["status"], config_path=self.path), 2)
         state.assert_not_called()
+
+    @patch("infra.terraform.host.control.os.geteuid", return_value=0)
+    def test_failed_bootstrap_status_has_safe_phase_guidance_without_starting_runtime(self, uid):
+        (self.root / "failed").touch()
+        (self.root / "bootstrap-stage").write_bytes(b"permissions")
+        with patch("infra.terraform.host.control.HostState") as state, contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(main(["status"], config_path=self.path), 2)
+        self.assertIn("stopped during permissions", json.loads(output.getvalue())["detail"])
+        state.assert_not_called()

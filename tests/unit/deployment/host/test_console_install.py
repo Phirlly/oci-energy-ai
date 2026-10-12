@@ -178,3 +178,44 @@ class ConsoleInstallationTests(unittest.TestCase):
             self.installer.run(self.desired)
         self.activator.activate.assert_not_called()
         self.assertEqual(self.record()["attempts"], 1)
+
+    def test_bootstrap_error_reports_last_stage_without_raw_failure_and_can_retry(self):
+        for stage in ("packages", "firewall", "runtime"):
+            with self.subTest(stage=stage):
+                self.journal.unlink(missing_ok=True)
+                (self.config / "ready").unlink(missing_ok=True)
+                (self.config / "bootstrap-stage").write_text(stage)
+                self.runner.side_effect = HostError("private-marker timed out")
+                self.activator.reset_mock()
+                with self.assertRaisesRegex(HostError, "stopped during " + stage) as raised:
+                    self.installer.run(self.desired)
+                self.assertNotIn("private-marker", str(raised.exception))
+                self.assertEqual(self.record()["attempts"], 1)
+                self.activator.activate.assert_not_called()
+                self.runner.side_effect = self.bootstrap
+                self.installer.run(self.desired)
+                self.assertEqual(self.record()["attempts"], 2)
+                self.assertTrue(self.record()["complete"])
+
+    def test_exhaustion_uses_stage_only_when_bootstrap_is_not_ready(self):
+        self.seed()
+        (self.config / "bootstrap-stage").write_text("firewall")
+        for ready, failed in ((False, False), (True, True), (True, False)):
+            with self.subTest(ready=ready, failed=failed):
+                for name, exists in (("ready", ready), ("failed", failed)):
+                    path = self.config / name
+                    path.touch() if exists else path.unlink(missing_ok=True)
+                with self.assertRaisesRegex(HostError, "attempts exhausted") as raised:
+                    self.installer.run(self.desired)
+                self.assertEqual("stopped during firewall" in str(raised.exception), not ready or failed)
+                self.assertEqual(self.record()["attempts"], 12)
+                self.runner.assert_not_called()
+                self.activator.activate.assert_not_called()
+
+    def test_ready_activation_failure_is_not_replaced_by_stale_bootstrap_stage(self):
+        (self.config / "ready").touch()
+        (self.config / "bootstrap-stage").write_text("packages")
+        self.activator.activate.side_effect = HostError("Application health check failed.")
+        with self.assertRaisesRegex(HostError, "^Application health check failed\\.$"):
+            self.installer.run(self.desired)
+        self.runner.assert_not_called()

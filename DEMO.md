@@ -112,6 +112,9 @@ presenters for up to 7 days/100 runs and survives restarts.
 
 - **Apply fails:** inspect the job logs for permissions, service access or capacity.
 - **Demo stays unavailable:** inspect the VM's `oci-energy-ai-install` service.
+  New installers report the phase where bootstrap stopped (such as packages,
+  firewall or service) with a suggested check. This identifies the step, not
+  necessarily the root cause; raw command output is kept out of installer errors.
   After fixing an exhausted installation, enable **Show advanced options** in
   the stack variables and increase **Installer retry generation** under
   **Installation recovery**. Save the variables and run **Apply** to send the
