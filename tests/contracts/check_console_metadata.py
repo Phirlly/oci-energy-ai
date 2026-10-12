@@ -36,7 +36,8 @@ def check(path):
                 for entry in cloud.splitlines():
                     if entry.startswith('- "content": "{'):
                         content = json.loads(json.loads(entry.split(': ', 1)[1]))
-                        if set(content) == {'version', 'host_digest', 'region', 'namespace', 'bucket'}:
+                        if set(content) == {'version', 'host_digest', 'region'}:
+                            assert content['version'] == 2
                             configurations.append(content)
                 assert len(configurations) == 1
                 helper_digest = configurations[0]['host_digest']

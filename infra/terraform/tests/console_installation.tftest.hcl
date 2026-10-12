@@ -38,6 +38,14 @@ variables {
 run "first_install_has_private_runtime_and_exact_settings_permissions" {
   command = apply
   assert {
+    condition     = length(oci_objectstorage_bucket.artifacts) == 0 && length(data.oci_objectstorage_namespace.current) == 0 && output.artifact_bucket_name == null && output.object_storage_namespace == null
+    error_message = "Console downloads public releases without a consumer bucket or namespace lookup."
+  }
+  assert {
+    condition     = local.host_configuration == { version = 2, host_digest = local.host_digest, region = var.region }
+    error_message = "Console host configuration must contain only its version, helper identity and region."
+  }
+  assert {
     condition     = local.application.home_region == "us-phoenix-1" && length(oci_core_instance.app) == 1
     error_message = "Console resolves home-region identity and creates the application."
   }
@@ -92,6 +100,37 @@ run "reject_ad_replacement" {
   command = plan
   variables { availability_domain = "EXAMPLE:US-ASHBURN-AD-2" }
   expect_failures = [oci_core_instance.app]
+}
+run "reject_old_console_helpers_when_private_storage_is_omitted" {
+  command   = plan
+  state_key = "old_helpers"
+  override_resource {
+    override_during = plan
+    target          = terraform_data.installation
+    values = {
+      output = {
+        console_install = true
+        topology = {
+          deployment_id    = "console-demo"
+          compartment_ocid = "ocid1.compartment.oc1..aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          region           = "us-ashburn-1"
+          application = {
+            version             = 1
+            tenancy_ocid        = "ocid1.tenancy.oc1..aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            home_region         = "us-phoenix-1"
+            availability_domain = "EXAMPLE:US-ASHBURN-AD-1"
+            image_ocid          = "ocid1.image.oc1.iad.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          }
+          host_digest = "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      }
+    }
+  }
+  expect_failures = [oci_core_instance.app]
+  assert {
+    condition     = length(oci_objectstorage_bucket.artifacts) == 0
+    error_message = "The old-helper guard must block the new bucket-free Console configuration."
+  }
 }
 run "reject_location_change" {
   command = plan

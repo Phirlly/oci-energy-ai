@@ -8,10 +8,10 @@ For an existing deployment, go straight to [Run the lab](#run-the-lab).
 **Preview:** the installer is published, but fresh Console installation is still
 being validated. This installs a fixed build in a new stack.
 
-Automatic image selection and advanced settings described below are source
-updates awaiting publication. The current README button still asks you to select
-a compatible Oracle Linux 9 platform image and uses fixed model choices; keep
-that image selection for later applies.
+The simplified installer described below is a source update awaiting publication.
+The current README button still requires an Oracle Linux 9 image, uses fixed
+model choices and creates a private artifact bucket. Keep its saved selections
+and original package for later applies; use the new package only for a fresh stack.
 
 Use **US East (Ashburn)** to match the verified OCI model region. You'll need:
 
@@ -21,7 +21,9 @@ Use **US East (Ashburn)** to match the verified OCI model region. You'll need:
 - Permission to read the deployment's setup secret in Vault.
 
 The demo creates a private VM (1 OCPU, 8 GB RAM, 50 GB disk), networking/NAT,
-HTTPS gateway, artifact bucket, Vault/key and a Generative AI project.
+HTTPS gateway, Vault/key and a Generative AI project. It downloads the checked
+application from the shared public release bucket; new Console installations
+do not create another artifact bucket. GitHub deployments keep private storage.
 These resources and model requests incur charges. OpenAI and Anthropic keys
 are optional.
 

@@ -22,17 +22,20 @@ def load_host_configuration(path=CONFIG_PATH):
     try:
         with Path(path).open("rb") as source:
             value = bounded_json(source.read(4097), 4096)
-        if (not isinstance(value, dict) or set(value) != {"version", "host_digest", "region", "namespace", "bucket"}
-                or type(value["version"]) is not int or value["version"] != 1
+        if (not isinstance(value, dict) or type(value.get("version")) is not int or value["version"] not in (1, 2)
                 or not digest_value(value["host_digest"])):
             raise ValueError()
-        for key, pattern in (("region", r"[a-z]{2,3}-[a-z][a-z0-9-]{1,30}-[1-9][0-9]?"),
-                             ("namespace", r"[A-Za-z0-9_-]{1,255}"),
-                             ("bucket", r"oci-energy-ai-[a-z][a-z0-9-]{1,30}[a-z0-9]-artifacts")):
+        patterns = {"region": r"[a-z]{2,3}-[a-z][a-z0-9-]{1,30}-[1-9][0-9]?"}
+        if value["version"] == 1:
+            patterns.update(namespace=r"[A-Za-z0-9_-]{1,255}",
+                            bucket=r"oci-energy-ai-[a-z][a-z0-9-]{1,30}[a-z0-9]-artifacts")
+        if set(value) != {"version", "host_digest"} | set(patterns):
+            raise ValueError()
+        for key, pattern in patterns.items():
             if not isinstance(value[key], str) or not re.fullmatch(pattern, value[key]):
                 raise ValueError()
         return value
-    except (OSError, TypeError, ValueError):
+    except (OSError, TypeError, ValueError, KeyError):
         raise HostError("Host bootstrap configuration is unavailable or invalid.") from None
 
 
@@ -47,6 +50,8 @@ def main(arguments=None, *, config_path=CONFIG_PATH, root=STATE_ROOT, run=RUN_RO
                 or (operation == "activate" and not digest_value(arguments[1]))):
             raise HostError("Invalid fixed host operation.")
         config = load_host_configuration(config_path)
+        if config["version"] == 2 and operation in {"activate", "rollback"}:
+            raise HostError("Use the Console installer to change this installation.")
         if (Path(config_path).parent / "failed").exists():
             raise HostError("Host bootstrap failed; inspect cloud-init before retrying.")
         if not (Path(config_path).parent / "ready").is_file():
@@ -56,7 +61,8 @@ def main(arguments=None, *, config_path=CONFIG_PATH, root=STATE_ROOT, run=RUN_RO
             raise HostError("Host bootstrap is not ready.")
         state = HostState(root, run, config["host_digest"])
         service = HostService(state)
-        activator = Activator(state, service, ArtifactStore(state, ObjectDownload(config), service))
+        artifacts = ArtifactStore(state, ObjectDownload(config), service) if config["version"] == 1 else None
+        activator = Activator(state, service, artifacts)
         if operation == "activate":
             activator.activate(arguments[1])
         elif operation == "rollback":

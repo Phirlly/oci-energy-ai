@@ -28,6 +28,10 @@ run "foundation_has_no_application_resources" {
 run "private_host_with_https_gateway_and_instance_identity" {
   command = apply
   assert {
+    condition     = length(oci_objectstorage_bucket.artifacts) == 1 && length(data.oci_objectstorage_namespace.current) == 1 && local.host_configuration == { version = 1, host_digest = local.host_digest, region = var.region, namespace = "example-namespace", bucket = "oci-energy-ai-energy-demo-artifacts" }
+    error_message = "GitHub hosting must retain its exact private storage and version-1 host configuration."
+  }
+  assert {
     condition     = length(terraform_data.console_image) == 0 && length(data.oci_core_images.console) == 0 && length(data.oci_core_image.console) == 0 && oci_core_instance.app[0].source_details[0].source_id == var.application.image_ocid
     error_message = "GitHub topology remains independently pinned and must not query Console images."
   }
@@ -77,7 +81,7 @@ run "private_host_with_https_gateway_and_instance_identity" {
     error_message = "Wildcard routes must retain the path without exposing requests in gateway logs."
   }
   assert {
-    condition     = length(oci_identity_policy.app[0].statements) == 4 && contains(oci_identity_policy.app[0].statements, "Allow dynamic-group id ${oci_identity_dynamic_group.app[0].id} to read objects in compartment id ${var.compartment_ocid} where target.bucket.name = '${oci_objectstorage_bucket.artifacts.name}'") && contains(oci_identity_policy.app[0].statements, "Allow dynamic-group id ${oci_identity_dynamic_group.app[0].id} to read secret-bundles in compartment id ${var.compartment_ocid} where any {target.secret.name = '${local.resource_prefix}-demo-password', target.secret.name = '${local.resource_prefix}-openai', target.secret.name = '${local.resource_prefix}-anthropic'}")
+    condition     = length(oci_identity_policy.app[0].statements) == 4 && contains(oci_identity_policy.app[0].statements, "Allow dynamic-group id ${oci_identity_dynamic_group.app[0].id} to read objects in compartment id ${var.compartment_ocid} where target.bucket.name = '${oci_objectstorage_bucket.artifacts[0].name}'") && contains(oci_identity_policy.app[0].statements, "Allow dynamic-group id ${oci_identity_dynamic_group.app[0].id} to read secret-bundles in compartment id ${var.compartment_ocid} where any {target.secret.name = '${local.resource_prefix}-demo-password', target.secret.name = '${local.resource_prefix}-openai', target.secret.name = '${local.resource_prefix}-anthropic'}")
     error_message = "Runtime reads must be scoped to this deployment's bucket and three secrets."
   }
   assert {

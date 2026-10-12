@@ -19,11 +19,11 @@ run "private_artifact_storage" {
   command = plan
 
   assert {
-    condition     = oci_objectstorage_bucket.artifacts.access_type == "NoPublicAccess"
+    condition     = oci_objectstorage_bucket.artifacts[0].access_type == "NoPublicAccess"
     error_message = "Deployment artifacts must require OCI authentication."
   }
   assert {
-    condition     = oci_objectstorage_bucket.artifacts.storage_tier == "Standard" && oci_objectstorage_bucket.artifacts.versioning == "Disabled"
+    condition     = oci_objectstorage_bucket.artifacts[0].storage_tier == "Standard" && oci_objectstorage_bucket.artifacts[0].versioning == "Disabled"
     error_message = "Immutable artifact names use Standard storage without hidden object versions."
   }
   assert {
@@ -31,7 +31,7 @@ run "private_artifact_storage" {
     error_message = "Artifact outputs must identify the deployment's private bucket."
   }
   assert {
-    condition     = oci_objectstorage_bucket.artifacts.compartment_id == var.compartment_ocid && oci_objectstorage_bucket.artifacts.freeform_tags["deployment_id"] == var.deployment_id
+    condition     = oci_objectstorage_bucket.artifacts[0].compartment_id == var.compartment_ocid && oci_objectstorage_bucket.artifacts[0].freeform_tags["deployment_id"] == var.deployment_id
     error_message = "Storage must belong to the selected deployment and compartment."
   }
 }

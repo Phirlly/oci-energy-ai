@@ -1,11 +1,11 @@
 output "artifact_bucket_name" {
   description = "Private bucket for immutable application artifacts."
-  value       = oci_objectstorage_bucket.artifacts.name
+  value       = var.console_install ? null : oci_objectstorage_bucket.artifacts[0].name
 }
 
 output "object_storage_namespace" {
   description = "Namespace containing the artifact bucket."
-  value       = data.oci_objectstorage_namespace.current.namespace
+  value       = var.console_install ? null : data.oci_objectstorage_namespace.current[0].namespace
 }
 
 output "generative_ai_project_ocid" {

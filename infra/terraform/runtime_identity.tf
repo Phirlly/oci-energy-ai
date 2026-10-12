@@ -26,7 +26,7 @@ resource "oci_identity_policy" "app" {
     "Allow dynamic-group id ${oci_identity_dynamic_group.app[0].id} to use secrets in ${local.runtime_scope} where all {target.secret.id = '${oci_vault_secret.settings[0].id}', any {request.permission = 'SECRET_READ', request.permission = 'SECRET_UPDATE'}}",
     "Allow dynamic-group id ${oci_identity_dynamic_group.app[0].id} to read secret-bundles in ${local.runtime_scope} where all {target.secret.id = '${oci_vault_secret.settings[0].id}', request.permission = 'SECRET_BUNDLE_READ'}",
     ] : [
-    "Allow dynamic-group id ${oci_identity_dynamic_group.app[0].id} to read objects in ${local.runtime_scope} where target.bucket.name = '${oci_objectstorage_bucket.artifacts.name}'",
+    "Allow dynamic-group id ${oci_identity_dynamic_group.app[0].id} to read objects in ${local.runtime_scope} where target.bucket.name = '${oci_objectstorage_bucket.artifacts[0].name}'",
     "Allow dynamic-group id ${oci_identity_dynamic_group.app[0].id} to read secret-bundles in ${local.runtime_scope} where ${local.runtime_secret_condition}",
     ], [
     "Allow dynamic-group id ${oci_identity_dynamic_group.app[0].id} to use instance-agent-command-execution-family in ${local.runtime_scope} where request.instance.id = target.instance.id",

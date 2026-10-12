@@ -7,13 +7,14 @@ locals {
     "service.py", "service_entry.py", "state.py",
   ]
   host_digest = sha256(join("", [for name in local.host_assets : filesha256("${path.module}/host/${name}")]))
-  host_configuration = {
-    version     = 1
+  host_configuration = merge({
+    version     = var.console_install ? 2 : 1
     host_digest = local.host_digest
     region      = var.region
-    namespace   = data.oci_objectstorage_namespace.current.namespace
-    bucket      = oci_objectstorage_bucket.artifacts.name
-  }
+    }, var.console_install ? {} : {
+    namespace = data.oci_objectstorage_namespace.current[0].namespace
+    bucket    = oci_objectstorage_bucket.artifacts[0].name
+  })
   cloud_config = {
     write_files = concat([
       for name in local.host_assets : {

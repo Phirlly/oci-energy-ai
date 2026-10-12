@@ -72,7 +72,7 @@ run "github_root_keeps_bucket_and_secret_access_scoped" {
   }
   assert {
     condition = toset(oci_identity_policy.app[0].statements) == toset([
-      "Allow dynamic-group id ${oci_identity_dynamic_group.app[0].id} to read objects in tenancy where target.bucket.name = '${oci_objectstorage_bucket.artifacts.name}'",
+      "Allow dynamic-group id ${oci_identity_dynamic_group.app[0].id} to read objects in tenancy where target.bucket.name = '${oci_objectstorage_bucket.artifacts[0].name}'",
       "Allow dynamic-group id ${oci_identity_dynamic_group.app[0].id} to read secret-bundles in tenancy where all {target.compartment.id = '${var.compartment_ocid}', any {target.secret.name = '${local.resource_prefix}-demo-password', target.secret.name = '${local.resource_prefix}-openai', target.secret.name = '${local.resource_prefix}-anthropic'}}",
       "Allow dynamic-group id ${oci_identity_dynamic_group.app[0].id} to use instance-agent-command-execution-family in tenancy where request.instance.id = target.instance.id",
       "Allow dynamic-group id ${oci_identity_dynamic_group.app[0].id} to manage generative-ai-response in tenancy where target.compartment.id = '${var.compartment_ocid}'",
@@ -85,8 +85,8 @@ run "console_root_creates_scoped_runtime_in_selected_root" {
   command = apply
   assert {
     condition = alltrue([
-      for compartment in [oci_objectstorage_bucket.artifacts.compartment_id, oci_generative_ai_project.energy.compartment_id, oci_core_instance.app[0].compartment_id, oci_core_vcn.app[0].compartment_id, oci_kms_vault.app[0].compartment_id, oci_kms_key.app[0].compartment_id, oci_vault_secret.settings[0].compartment_id, oci_apigateway_gateway.app[0].compartment_id, oci_identity_policy.app[0].compartment_id, oci_identity_dynamic_group.app[0].compartment_id] : compartment == var.compartment_ocid
-    ]) && oci_identity_dynamic_group.app[0].matching_rule == "instance.id = '${oci_core_instance.app[0].id}'"
+      for compartment in [oci_generative_ai_project.energy.compartment_id, oci_core_instance.app[0].compartment_id, oci_core_vcn.app[0].compartment_id, oci_kms_vault.app[0].compartment_id, oci_kms_key.app[0].compartment_id, oci_vault_secret.settings[0].compartment_id, oci_apigateway_gateway.app[0].compartment_id, oci_identity_policy.app[0].compartment_id, oci_identity_dynamic_group.app[0].compartment_id] : compartment == var.compartment_ocid
+    ]) && length(oci_objectstorage_bucket.artifacts) == 0 && oci_identity_dynamic_group.app[0].matching_rule == "instance.id = '${oci_core_instance.app[0].id}'"
     error_message = "The root install must target its selected root and exact runtime instance."
   }
   assert {
