@@ -2,9 +2,9 @@ from pathlib import Path
 
 
 EXPECTED_MEMBERS = (
-    ".terraform.lock.hcl", "compute.tf", "gateway.tf", "locals.tf", "network.tf", "network_access.tf",
+    ".terraform.lock.hcl", "compute.tf", "console.tf", "console_variables.tf", "gateway.tf", "locals.tf", "network.tf", "network_access.tf",
     "outputs.tf", "project.tf", "providers.tf", "runtime_identity.tf", "storage.tf", "variables.tf",
-    "vault.tf", "versions.tf",
+    "settings.tf", "vault.tf", "versions.tf",
     "host/__init__.py", "host/activation.py", "host/artifacts.py", "host/bootstrap.sh",
     "host/console_contract.py", "host/console_install.py", "host/console_sources.py", "host/contracts.py",
     "host/control.py", "host/entrypoint.py", "host/install_entry.py", "host/oci-energy-ai-install.service",

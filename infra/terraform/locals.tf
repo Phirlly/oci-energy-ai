@@ -1,5 +1,5 @@
 locals {
-  application_count = var.application == null ? 0 : 1
+  application_count = local.application == null ? 0 : 1
   resource_prefix   = "oci-energy-ai-${var.deployment_id}"
   ownership_tags = {
     application   = "oci-energy-ai"

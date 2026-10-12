@@ -27,15 +27,19 @@ locals {
       { path = "/usr/local/sbin/oci-energy-ai", owner = "root:root", permissions = "0755", content = file("${path.module}/host/entrypoint.py") },
       { path = "/etc/systemd/system/oci-energy-ai.service", owner = "root:root", permissions = "0644", content = file("${path.module}/host/oci-energy-ai.service") },
       { path = "/etc/sudoers.d/oci-energy-ai", owner = "root:root", permissions = "0440", content = "ocarun ALL=(root) NOPASSWD: /usr/local/sbin/oci-energy-ai\n" },
-    ])
-    runcmd = [["/bin/bash", "/opt/oci-energy-ai/host/bootstrap.sh"]]
+      ], var.console_install ? [
+      for name in ["oci-energy-ai-install.service", "oci-energy-ai-install.timer"] : {
+        path = "/etc/systemd/system/${name}", owner = "root:root", permissions = "0644", content = file("${path.module}/host/${name}")
+      }
+    ] : [])
+    runcmd = var.console_install ? [["systemctl", "daemon-reload"], ["systemctl", "enable", "--now", "oci-energy-ai-install.timer"]] : [["/bin/bash", "/opt/oci-energy-ai/host/bootstrap.sh"]]
   }
 }
 
 resource "oci_core_instance" "app" {
   count                = local.application_count
   compartment_id       = var.compartment_ocid
-  availability_domain  = var.application.availability_domain
+  availability_domain  = local.application.availability_domain
   display_name         = local.resource_prefix
   shape                = "VM.Standard.E5.Flex"
   freeform_tags        = local.ownership_tags
@@ -46,7 +50,7 @@ resource "oci_core_instance" "app" {
   }
   source_details {
     source_type             = "image"
-    source_id               = var.application.image_ocid
+    source_id               = local.application.image_ocid
     boot_volume_size_in_gbs = 50
   }
   create_vnic_details {
@@ -64,14 +68,20 @@ resource "oci_core_instance" "app" {
       desired_state = "ENABLED"
     }
   }
-  metadata = {
-    user_data = base64gzip("#cloud-config\n${yamlencode(local.cloud_config)}")
-  }
+  metadata = local.instance_metadata
   lifecycle {
     precondition {
-      condition     = length(jsonencode({ user_data = base64gzip("#cloud-config\n${yamlencode(local.cloud_config)}") })) < 32000
+      condition     = length(jsonencode(local.instance_metadata)) < 32000
       error_message = "Host metadata exceeds OCI's combined 32,000-byte limit."
     }
+    precondition {
+      condition     = !var.console_install || terraform_data.installation.output.topology == local.console_topology
+      error_message = "Console host identity is fixed. Preserve the saved image, domain, location and helpers; use a fresh stack for a different host."
+    }
+    precondition {
+      condition     = !var.console_install || try(var.console_release.host_digest == local.host_digest, false)
+      error_message = "The checked release must match the packaged host helpers."
+    }
   }
-  depends_on = [oci_core_network_security_group_security_rule.app_https]
+  depends_on = [oci_core_network_security_group_security_rule.app_https, data.oci_core_image.console, data.oci_core_shapes.console]
 }

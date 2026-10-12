@@ -9,9 +9,9 @@ from zipfile import ZIP_STORED, ZipFile, ZipInfo
 
 
 _MEMBERS = (
-    ".terraform.lock.hcl", "compute.tf", "gateway.tf", "locals.tf", "network.tf", "network_access.tf",
+    ".terraform.lock.hcl", "compute.tf", "console.tf", "console_variables.tf", "gateway.tf", "locals.tf", "network.tf", "network_access.tf",
     "outputs.tf", "project.tf", "providers.tf", "runtime_identity.tf", "storage.tf", "variables.tf",
-    "vault.tf", "versions.tf",
+    "settings.tf", "vault.tf", "versions.tf",
     "host/__init__.py", "host/activation.py", "host/artifacts.py", "host/bootstrap.sh",
     "host/console_contract.py", "host/console_install.py", "host/console_sources.py", "host/contracts.py",
     "host/control.py", "host/entrypoint.py", "host/install_entry.py", "host/oci-energy-ai-install.service",
@@ -37,6 +37,11 @@ def build_bundle(repository_root: Path, output: Path) -> str:
     """Return SHA256; reject unsafe source and never replace an existing output."""
     source = Path(repository_root).absolute() / "infra" / "terraform"
     members = [(name, _read_member(source / name)) for name in _MEMBERS]
+    return _write_archive(members, output)
+
+
+def _write_archive(members, output):
+    """Write an explicitly assembled member list without replacing an output."""
     buffer = BytesIO()
     with ZipFile(buffer, "w", compression=ZIP_STORED) as archive:
         for name, content in members:

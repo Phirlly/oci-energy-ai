@@ -96,7 +96,12 @@ jobs:
       - if: matrix.version == '1.16.4'
         run: terraform fmt -check -recursive
       - if: matrix.version == '1.16.4'
-        run: terraform test -no-color
+        run: |
+          mkdir -p ../../.tmp
+          test_result=0
+          terraform test -json -verbose > ../../.tmp/terraform-test.jsonl || test_result=$?
+          python3 ../../tests/contracts/check_console_metadata.py ../../.tmp/terraform-test.jsonl
+          exit "$test_result"
 
   browser:
     runs-on: ubuntu-24.04

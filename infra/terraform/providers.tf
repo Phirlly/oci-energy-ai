@@ -4,5 +4,5 @@ provider "oci" {
 
 provider "oci" {
   alias  = "home"
-  region = var.application == null ? var.region : var.application.home_region
+  region = local.application == null ? var.region : local.application.home_region
 }

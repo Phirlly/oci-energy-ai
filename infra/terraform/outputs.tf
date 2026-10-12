@@ -32,3 +32,8 @@ output "vault_ocid" {
 output "key_ocid" {
   value = try(oci_kms_key.app[0].id, null)
 }
+
+output "settings_secret_ocid" {
+  description = "Open this secret in OCI Vault and reveal CURRENT content to retrieve setup_code. No password or key belongs in Terraform."
+  value       = try(oci_vault_secret.settings[0].id, null)
+}

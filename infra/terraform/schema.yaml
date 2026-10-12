@@ -1,0 +1,226 @@
+{
+  "title": "OCI Energy AI",
+  "description": "Deploy the energy demo in a fresh OCI Resource Manager stack.",
+  "schemaVersion": "1.1.0",
+  "version": "preview",
+  "locale": "en",
+  "informationalText": "Creates paid OCI resources: a private VM (1 OCPU, 8 GB RAM, 50 GB boot disk), networking/NAT, HTTPS API Gateway, Vault and a Generative AI project. Use a compartment and region with capacity and access to these services. Your OCI identity must be allowed to provision them and create the runtime dynamic group and policy in the tenancy.",
+  "instructions": "After Apply succeeds, installation continues on the VM. Open the demo when it becomes ready. In OCI Vault, open the settings secret listed below and reveal its CURRENT content; copy setup_code into the demo. Choose any nonblank printable demo password and optionally add OpenAI and Anthropic keys there. Keep credentials out of stack variables. This ZIP is for a fresh stack; it does not convert an existing deployment.",
+  "troubleshooting": "If installation exhausts its attempts, inspect the VM's installer service and fix the reported prerequisite before increasing Installer retry generation. Keep the saved host image, domain and location. Destroy removes this demo's resources and public history; Vault deletion follows OCI waiting periods. The Resource Manager stack record remains.",
+  "variableGroups": [
+    {
+      "title": "Deployment",
+      "variables": [
+        "${deployment_id}",
+        "${compartment_ocid}",
+        "${availability_domain}",
+        "${image_ocid}"
+      ]
+    },
+    {
+      "title": "Installation recovery",
+      "variables": [
+        "${install_generation}"
+      ]
+    },
+    {
+      "title": "Supplied by OCI and this package",
+      "visible": false,
+      "variables": [
+        "${tenancy_ocid}",
+        "${region}",
+        "${console_install}",
+        "${console_release}",
+        "${application}",
+        "${instance_shape}",
+        "${image_operating_system}"
+      ]
+    }
+  ],
+  "variables": {
+    "deployment_id": {
+      "type": "string",
+      "title": "Deployment name",
+      "description": "Unique name for this installation (3–32 lowercase letters, digits or hyphens).",
+      "default": "energy-demo",
+      "required": true,
+      "pattern": "^[a-z][a-z0-9-]{1,30}[a-z0-9]$"
+    },
+    "compartment_ocid": {
+      "type": "oci:identity:compartment:id",
+      "title": "Compartment",
+      "required": true
+    },
+    "availability_domain": {
+      "type": "oci:identity:availabilitydomain:name",
+      "title": "Availability domain",
+      "required": true,
+      "dependsOn": {
+        "compartmentId": "${compartment_ocid}"
+      }
+    },
+    "image_ocid": {
+      "type": "oci:core:image:id",
+      "title": "Oracle Linux 9 image",
+      "description": "Choose an Oracle Linux 9 platform image. Keep this selection for later applies.",
+      "required": true,
+      "dependsOn": {
+        "compartmentId": "${compartment_ocid}",
+        "shape": "${instance_shape}",
+        "operatingSystem": "${image_operating_system}"
+      }
+    },
+    "install_generation": {
+      "type": "integer",
+      "title": "Installer retry generation",
+      "description": "Leave at 0 for initial deployment. Increase only after fixing an exhausted installation.",
+      "default": 0,
+      "minimum": 0,
+      "maximum": 1000000
+    },
+    "tenancy_ocid": {
+      "type": "string",
+      "visible": false
+    },
+    "region": {
+      "type": "string",
+      "visible": false
+    },
+    "console_install": {
+      "type": "boolean",
+      "visible": false,
+      "default": true
+    },
+    "console_release": {
+      "type": "object",
+      "visible": false,
+      "attributes": [
+        "console_release_artifact_base",
+        "console_release_release",
+        "console_release_host_digest",
+        "console_release_image_id",
+        "console_release_image_sha256",
+        "console_release_image_bytes"
+      ],
+      "title": "Checked public release"
+    },
+    "application": {
+      "type": "object",
+      "visible": false,
+      "attributes": [
+        "application_version",
+        "application_tenancy_ocid",
+        "application_home_region",
+        "application_availability_domain",
+        "application_image_ocid"
+      ],
+      "title": "GitHub application topology"
+    },
+    "instance_shape": {
+      "type": "string",
+      "visible": false,
+      "default": "VM.Standard.E5.Flex"
+    },
+    "image_operating_system": {
+      "type": "string",
+      "visible": false,
+      "default": "Oracle Linux"
+    },
+    "console_release_artifact_base": {
+      "type": "string",
+      "actualName": "artifact_base",
+      "visible": false
+    },
+    "console_release_release": {
+      "type": "string",
+      "actualName": "release",
+      "visible": false
+    },
+    "console_release_host_digest": {
+      "type": "string",
+      "actualName": "host_digest",
+      "visible": false
+    },
+    "console_release_image_id": {
+      "type": "string",
+      "actualName": "image_id",
+      "visible": false
+    },
+    "console_release_image_sha256": {
+      "type": "string",
+      "actualName": "image_sha256",
+      "visible": false
+    },
+    "console_release_image_bytes": {
+      "type": "integer",
+      "actualName": "image_bytes",
+      "visible": false
+    },
+    "application_version": {
+      "type": "integer",
+      "actualName": "version",
+      "visible": false
+    },
+    "application_tenancy_ocid": {
+      "type": "string",
+      "actualName": "tenancy_ocid",
+      "visible": false
+    },
+    "application_home_region": {
+      "type": "string",
+      "actualName": "home_region",
+      "visible": false
+    },
+    "application_availability_domain": {
+      "type": "string",
+      "actualName": "availability_domain",
+      "visible": false
+    },
+    "application_image_ocid": {
+      "type": "string",
+      "actualName": "image_ocid",
+      "visible": false
+    }
+  },
+  "outputs": {
+    "application_origin": {
+      "type": "link",
+      "title": "Energy demo",
+      "displayText": "Open energy demo"
+    },
+    "settings_secret_ocid": {
+      "type": "ocid",
+      "title": "Owner setup secret",
+      "description": "Reveal CURRENT content in Vault and copy setup_code. Credentials are entered only in the demo."
+    },
+    "instance_ocid": {
+      "type": "ocid",
+      "title": "Application VM"
+    },
+    "artifact_bucket_name": {
+      "visible": false,
+      "type": "string"
+    },
+    "object_storage_namespace": {
+      "visible": false,
+      "type": "string"
+    },
+    "generative_ai_project_ocid": {
+      "visible": false,
+      "type": "ocid"
+    },
+    "backend_host": {
+      "visible": false,
+      "type": "string"
+    },
+    "vault_ocid": {
+      "visible": false,
+      "type": "ocid"
+    },
+    "key_ocid": {
+      "visible": false,
+      "type": "ocid"
+    }
+  },
+  "primaryOutputButton": "${application_origin}"
+}
