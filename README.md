@@ -4,13 +4,56 @@ An OCI demo for reviewing electricity bills and exploring battery scenarios.
 The browser connects a prepared office month, battery scenarios, two tool-using
 analysts and personal bill review. Python/FastAPI and React run on OCI; the OpenAI
 Agents SDK orchestrates OCI, OpenAI and Anthropic model adapters.
-**Status:** Hosted demo under validation. Office calculations and agent tool calls
-pass through OCI, OpenAI and Anthropic. Bill-reading compatibility and accuracy
-remain under validation. Update, rollback, restart and cleanup are verified;
-fresh provisioning needed manual recovery. Repeatability and an independent
-operator rehearsal remain open.
+**Status:** Demo preview. Office calculations and agent tool calls have been
+verified through OCI, OpenAI and Anthropic. Bill-reading accuracy and fresh
+installation remain under validation.
 
-## Try the demo
+## Deploy on OCI
+
+**Preview installer:** the published package is verified; a complete fresh
+Resource Manager installation is still being validated.
+
+[![Deploy to Oracle Cloud](https://oci-resourcemanager-plugin.plugins.oci.oraclecloud.com/latest/deploy-to-oracle-cloud.svg)](https://cloud.oracle.com/resourcemanager/stacks/create?zipUrl=https%3A%2F%2Fobjectstorage.us-ashburn-1.oraclecloud.com%2Fn%2Fiddpyrbvyjar%2Fb%2Foci-energy-ai-releases-5d7383358dbb-artifacts%2Fo%2Ftemplates%252F94f711f0aa3cf27b24ec5bb753b1334fa0cdb634977108a6f642192e9bba70ad.zip)
+
+Deploys the pinned [751fc20 build](https://github.com/Phirlly/oci-energy-ai/commit/751fc2087c2dcb3367ac860eb92f4be6358f8bd0).
+No GitHub configuration, local tools or API signing key are needed for this path.
+
+**Before you start:** use an OCI compartment with capacity for the resources below.
+Your OCI identity must be able to provision them, create the runtime dynamic group
+and IAM policy, and read Vault secret contents. Start with **US East (Ashburn)**,
+where the demo's OCI model has been verified. Hosting creates a private VM
+(1 OCPU, 8 GB RAM, 50 GB boot disk), networking/NAT, HTTPS API Gateway, an artifact
+bucket, Vault/key and a Generative AI project. OCI and model-provider charges apply.
+
+1. Click the button, sign in to OCI and select the target region and compartment.
+   Review Oracle's terms and create a **new stack** using Terraform **1.5.x**.
+2. Choose a unique **Deployment name**, **Availability domain** and compatible
+   **Oracle Linux 9 image**. Leave **Installer retry generation** at `0`.
+   Keep **Run apply** selected on the review page, then choose **Create**.
+3. Wait for Apply to succeed. Application installation continues on the VM;
+   the demo URL may take longer to become available.
+4. In the Apply job's outputs, find **Owner setup secret** (`settings_secret_ocid`).
+   Open that secret in OCI Vault, reveal its **CURRENT** version's contents and
+   copy the `setup_code` value.
+5. Open **Energy demo** (`application_origin`). Enter the setup code, choose your
+   demo password and optionally add OpenAI and Anthropic API keys. Select
+   **Save setup**, then sign in with that password. Settings are stored in OCI Vault;
+   never enter passwords or API keys in Terraform variables.
+6. Open **Office demo** and select **Calculate scenario**. For bill review, choose
+   **Review your bills → Try the example**. Both work without external model keys.
+
+If Apply fails, inspect its job logs for permission or capacity errors. If the
+demo remains unavailable after Apply, inspect the VM's `oci-energy-ai-install`
+service; increase **Installer retry generation** only after fixing an exhausted
+installation. Keep the saved region, compartment, image and availability domain.
+This preview installs a fixed build in a fresh stack; it does not provide in-place
+upgrades or GitHub-managed rollback for Console installations.
+
+**Remove this installation:** run **Destroy** on its Resource Manager stack.
+This removes demo resources and public history; Vault deletion follows OCI waiting
+periods. The empty stack record remains. Shared public installer files are retained.
+
+## Run locally (optional)
 
 Use **Linux or macOS**, **Python 3.12**, **Node 26.10.0** and [uv](https://docs.astral.sh/uv/getting-started/installation/).
 From the repository root:
@@ -63,8 +106,8 @@ are discarded after parsing. Public office history is shared across presenters
 and stored in `runtime/office.sqlite3`, limited to 100 runs and 7 days. One office
 analysis runs at a time, with a 180-second deadline and cancellation.
 Linux parsing has a hard address-space limit; macOS uses a soft RSS watchdog
-that needs process-inspection permission. Use the deployment workflow below for
-public HTTPS hosting.
+that needs process-inspection permission. Use **Deploy on OCI** above for public
+HTTPS hosting.
 
 ## Explore the office battery example
 
@@ -90,7 +133,11 @@ Timezone/DST repair is unsupported. Copy the example
 This interval calculator supports the documented flat USD tariff, independently
 of uploaded-bill analysis.
 
-## GitHub / OCI setup
+## GitHub deployment (optional)
+
+Use this alternative to manage builds and deployment from your own repository.
+These workflows and lifecycle commands apply to GitHub-managed installations;
+do not point them at a stack created with the Console button above.
 
 1. Create the GitHub environment **demo**. Restrict its deployment branches to
    `dev` and `main` before adding credentials. Forks need their own settings and
