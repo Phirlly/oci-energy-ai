@@ -156,7 +156,10 @@ class ConsoleSchemaTests(unittest.TestCase):
     def test_every_output_has_the_required_type_including_hidden_outputs(self):
         path = Path(__file__).resolve().parents[2] / 'infra/terraform/schema.yaml'
         outputs = json.loads(path.read_text())['outputs']
+        links = {'application_origin', 'settings_secret_url'}
+        for name in links:
+            self.assertEqual(outputs.get(name, {}).get('type'), 'link')
         for name, value in outputs.items():
             with self.subTest(output=name):
-                expected = 'link' if name == 'application_origin' else 'ocid' if name.endswith('_ocid') else 'string'
+                expected = 'link' if name in links else 'ocid' if name.endswith('_ocid') else 'string'
                 self.assertEqual(value['type'], expected)

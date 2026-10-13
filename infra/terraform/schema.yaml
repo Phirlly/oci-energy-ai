@@ -5,7 +5,7 @@
   "version": "preview",
   "locale": "en",
   "informationalText": "Creates paid OCI resources: a private VM (1 OCPU, 8 GB RAM, 50 GB boot disk), networking/NAT, HTTPS API Gateway, Vault and a Generative AI project. Use a compartment and region with capacity and access to these services. Your OCI identity must be allowed to provision them and create the runtime dynamic group and policy in the tenancy.",
-  "instructions": "After Apply succeeds, installation continues on the VM. Find Owner setup secret below and follow its retrieval steps. Open Energy demo when ready. Enter the setup_code value in Owner code, choose your Demo password and optionally add OpenAI and Anthropic keys. Save setup, then sign in with that password. Keep credentials out of stack variables. This ZIP is for a fresh stack; it does not convert an existing deployment.",
+  "instructions": "After Apply succeeds, installation continues on the VM. Select Open owner setup secret below and follow its retrieval steps. Open Energy demo when ready. Enter the setup_code value in Owner code, choose your Demo password and optionally add OpenAI and Anthropic keys. Save setup, then sign in with that password. Keep credentials out of stack variables. This ZIP is for a fresh stack; it does not convert an existing deployment.",
   "troubleshooting": "If installation exhausts its attempts, inspect the VM's installer service and fix the reported prerequisite before increasing Installer retry generation. Keep the saved host image, domain and location. Destroy removes this demo's resources and public history; Vault deletion follows OCI waiting periods. The Resource Manager stack record remains.",
   "variableGroups": [
     {
@@ -222,8 +222,14 @@
     },
     "settings_secret_ocid": {
       "type": "ocid",
-      "title": "Owner setup secret",
+      "title": "Settings secret OCID",
       "description": "In the deployment region, open Identity & Security > Secret Management, select the deployment compartment and the secret matching this OCID. Under Versions, open CURRENT actions > View Secret Contents, enable decoded Base64 and copy only setup_code into Owner code in the demo."
+    },
+    "settings_secret_url": {
+      "type": "link",
+      "title": "Owner setup secret",
+      "displayText": "Open owner setup secret",
+      "description": "Opens this deployment's settings secret in the correct region. Under Versions, open CURRENT actions > View Secret Contents, enable decoded Base64 and copy only setup_code into Owner code in the demo."
     },
     "instance_ocid": {
       "type": "ocid",

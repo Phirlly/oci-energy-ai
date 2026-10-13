@@ -77,6 +77,10 @@ run "first_install_has_private_runtime_and_exact_settings_permissions" {
     condition     = output.settings_secret_ocid == oci_vault_secret.settings[0].id && jsondecode(file("schema.yaml")).primaryOutputButton == "$${application_origin}"
     error_message = "Console must expose application link and settings identity only."
   }
+  assert {
+    condition     = output.settings_secret_url == "https://cloud.oracle.com/security/kms/${oci_kms_vault.app[0].id}/secrets/${oci_vault_secret.settings[0].id}?region=us-ashburn-1"
+    error_message = "The owner link must open this stack's secret in the deployment region, not the tenancy home region."
+  }
 }
 
 run "unchanged_reapply_retains_installation_and_settings" {
@@ -88,6 +92,10 @@ run "unchanged_reapply_retains_installation_and_settings" {
   assert {
     condition     = output.settings_secret_ocid == run.first_install_has_private_runtime_and_exact_settings_permissions.settings_secret_ocid
     error_message = "Reapply must preserve the owned settings secret."
+  }
+  assert {
+    condition     = output.settings_secret_url == run.first_install_has_private_runtime_and_exact_settings_permissions.settings_secret_url
+    error_message = "An unchanged stack must retain its owner-secret link."
   }
 }
 
@@ -161,5 +169,25 @@ run "clearing_manual_override_retains_saved_image" {
   assert {
     condition     = oci_core_instance.app[0].source_details[0].source_id == "ocid1.image.oc1.iad.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" && output.instance_ocid == run.first_install_has_private_runtime_and_exact_settings_permissions.instance_ocid && output.settings_secret_ocid == run.first_install_has_private_runtime_and_exact_settings_permissions.settings_secret_ocid
     error_message = "Clearing an optional override must retain the saved manual image and host."
+  }
+}
+
+run "owner_secret_link_uses_the_selected_region" {
+  command   = plan
+  state_key = "secret_link_region"
+  variables { region = "us-phoenix-1" }
+  override_resource {
+    override_during = plan
+    target          = oci_kms_vault.app[0]
+    values          = { id = "ocid1.vault.oc1.phx.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
+  }
+  override_resource {
+    override_during = plan
+    target          = oci_vault_secret.settings[0]
+    values          = { id = "ocid1.vaultsecret.oc1.phx.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" }
+  }
+  assert {
+    condition     = output.settings_secret_url == "https://cloud.oracle.com/security/kms/ocid1.vault.oc1.phx.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/secrets/ocid1.vaultsecret.oc1.phx.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb?region=us-phoenix-1"
+    error_message = "Owner-secret links must follow the selected region rather than hard-code Ashburn."
   }
 }

@@ -16,6 +16,10 @@ variables {
 run "foundation_has_no_application_resources" {
   command = plan
   assert {
+    condition     = output.settings_secret_url == null
+    error_message = "Foundation-only deployments have no Console owner-secret link."
+  }
+  assert {
     condition     = length(terraform_data.console_image) == 0 && length(data.oci_core_images.console) == 0 && length(data.oci_core_image.console) == 0
     error_message = "Foundation deployment must not select or read a Console image."
   }
@@ -27,6 +31,10 @@ run "foundation_has_no_application_resources" {
 
 run "private_host_with_https_gateway_and_instance_identity" {
   command = apply
+  assert {
+    condition     = output.settings_secret_url == null
+    error_message = "GitHub hosting must not expose a nonexistent Console settings secret."
+  }
   assert {
     condition     = length(oci_objectstorage_bucket.artifacts) == 1 && length(data.oci_objectstorage_namespace.current) == 1 && local.host_configuration == { version = 1, host_digest = local.host_digest, region = var.region, namespace = "example-namespace", bucket = "oci-energy-ai-energy-demo-artifacts" }
     error_message = "GitHub hosting must retain its exact private storage and version-1 host configuration."

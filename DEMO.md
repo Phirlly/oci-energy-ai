@@ -10,8 +10,9 @@ being validated. This installs a fixed build in a new stack.
 
 The simplified installer described below is a source update awaiting publication.
 The current README button still requires an Oracle Linux 9 image, uses fixed
-model choices and creates a private artifact bucket. Keep its saved selections
-and original package for later applies; use the new package only for a fresh stack.
+model choices, creates a private artifact bucket and needs manual secret lookup.
+Keep its saved selections and original package for later applies; use the new
+package only for a fresh stack.
 
 Use **US East (Ashburn)** to match the verified OCI model region. You'll need:
 
@@ -36,16 +37,20 @@ are optional.
    On the review page, keep **Run apply** selected and choose **Create**.
 3. After Apply succeeds, application installation continues on the VM.
    The demo URL may take longer to become available.
-4. Find **Owner setup secret** (`settings_secret_ocid`) in the Apply job's outputs.
-   In the same region, open **Identity & Security → Secret Management**, select
-   your deployment compartment and open the secret matching that OCID. Select
-   **Versions**, then **⋮ → View Secret Contents** for the **CURRENT** version.
+4. In the Apply job's outputs, select **Open owner setup secret** (`settings_secret_url`).
+   This opens your secret in the correct region. Select **Versions**, then
+   **⋮ → View Secret Contents** for the **CURRENT** version.
    Enable decoded Base64 and copy only the value beside `setup_code`.
 5. Open **Energy demo** (`application_origin`). Enter that value in **Owner code**, choose
    your demo password and optionally add either, both or neither provider key.
    Select **Save setup**. Credentials are saved in Vault; never put them in Terraform
    variables. Keep the owner code private; presenters only need the demo password.
 6. Enter your **Demo password** and select **Sign in**.
+
+**Earlier package without the shortcut:** copy `settings_secret_ocid` from the
+Apply outputs. In the deployment region, open **Identity & Security → Secret
+Management**, select your compartment and vault, and open the matching secret.
+Then follow the **Versions** steps above.
 
 ## Run the lab
 

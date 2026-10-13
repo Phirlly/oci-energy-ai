@@ -32,9 +32,8 @@ export default function FirstRunSetup({ completed }) {
   return <section className="welcome first-run">
     <p className="eyebrow">Welcome / First-time setup</p><h1>Set up your demo</h1>
     <p>Choose the password your presenters will use. Your settings are saved securely in OCI Vault.</p>
-    <p className="muted" id="setup-guidance">Find <strong>Owner setup secret</strong> in the Resource Manager Apply outputs.
-      In the same region, open <strong>Identity &amp; Security → Secret Management</strong>, choose the deployment’s
-      compartment and open the secret matching that OCID. Under <strong>Versions</strong>, open the
+    <p className="muted" id="setup-guidance">In the Resource Manager Apply outputs, select <strong>Open owner setup secret</strong>.
+      This opens your secret in the correct region. Under <strong>Versions</strong>, open the
       <strong> CURRENT</strong> version’s actions, select <strong>View Secret Contents</strong> and enable decoded Base64.
       Copy only the <strong>setup_code</strong> value. This owner code confirms you own this installation.
       Keep it private; after setup it is stored as <strong>owner_code</strong> for updating provider keys.</p>

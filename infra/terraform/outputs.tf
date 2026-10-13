@@ -37,3 +37,8 @@ output "settings_secret_ocid" {
   description = "In the deployment region, open Identity & Security > Secret Management, select the deployment compartment and this secret's OCID. Under Versions, open CURRENT actions > View Secret Contents, enable decoded Base64 and copy only setup_code into Owner code in the demo. Keep credentials out of Terraform."
   value       = try(oci_vault_secret.settings[0].id, null)
 }
+
+output "settings_secret_url" {
+  description = "Open the owner setup secret in OCI Console. Under Versions, view CURRENT contents with decoded Base64 and copy only setup_code into the demo's Owner code field."
+  value       = var.console_install ? "https://cloud.oracle.com/security/kms/${oci_kms_vault.app[0].id}/secrets/${oci_vault_secret.settings[0].id}?region=${var.region}" : null
+}
