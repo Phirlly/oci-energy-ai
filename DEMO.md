@@ -37,12 +37,14 @@ are optional.
    On the review page, keep **Run apply** selected and choose **Create**.
 3. After Apply succeeds, application installation continues on the VM.
    The demo URL may take longer to become available.
-4. In the Apply job's outputs, select **Open owner setup secret** (`settings_secret_url`).
+4. Open your Resource Manager stack's **Application information** tab and select
+   **Open owner setup secret** (`settings_secret_url`).
    This opens your secret in the correct region. Select **Versions**, then
    **⋮ → View Secret Contents** for the **CURRENT** version.
    Enable decoded Base64 and copy only the value beside `setup_code`.
-5. Open **Energy demo** (`application_origin`). Enter that value in **Owner code**, choose
-   your demo password and optionally add either, both or neither provider key.
+5. Return to **Application information** and select **Open energy demo** (`application_origin`).
+   Enter the copied value in **Owner code**, choose your demo password and optionally
+   add either, both or neither provider key.
    Select **Save setup**. Credentials are saved in Vault; never put them in Terraform
    variables. Keep the owner code private; presenters only need the demo password.
 6. Enter your **Demo password** and select **Sign in**.

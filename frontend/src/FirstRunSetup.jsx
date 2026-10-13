@@ -32,7 +32,8 @@ export default function FirstRunSetup({ completed }) {
   return <section className="welcome first-run">
     <p className="eyebrow">Welcome / First-time setup</p><h1>Set up your demo</h1>
     <p>Choose the password your presenters will use. Your settings are saved securely in OCI Vault.</p>
-    <p className="muted" id="setup-guidance">In the Resource Manager Apply outputs, select <strong>Open owner setup secret</strong>.
+    <p className="muted" id="setup-guidance">Open your Resource Manager stack’s <strong>Application information</strong> tab,
+      then select <strong>Open owner setup secret</strong>.
       This opens your secret in the correct region. Under <strong>Versions</strong>, open the
       <strong> CURRENT</strong> version’s actions, select <strong>View Secret Contents</strong> and enable decoded Base64.
       Copy only the <strong>setup_code</strong> value. This owner code confirms you own this installation.
