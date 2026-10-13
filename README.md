@@ -24,7 +24,7 @@ the explanations and optional bill extraction.
 **Preview:** fresh Resource Manager installation is still being validated.
 
 <p align="center">
-  <a href="https://cloud.oracle.com/resourcemanager/stacks/create?zipUrl=https%3A%2F%2Fobjectstorage.us-ashburn-1.oraclecloud.com%2Fn%2Fiddpyrbvyjar%2Fb%2Foci-energy-ai-releases-5d7383358dbb-artifacts%2Fo%2Ftemplates%252F94f711f0aa3cf27b24ec5bb753b1334fa0cdb634977108a6f642192e9bba70ad.zip">
+  <a href="https://cloud.oracle.com/resourcemanager/stacks/create?zipUrl=https%3A%2F%2Fobjectstorage.us-ashburn-1.oraclecloud.com%2Fn%2Fiddpyrbvyjar%2Fb%2Foci-energy-ai-releases-5d7383358dbb-artifacts%2Fo%2Ftemplates%252Fdf3272ad21fbf1da40ee7d0a775f7b8465a445fcf668b212e767c22049cf3d63.zip">
     <img src="https://oci-resourcemanager-plugin.plugins.oci.oraclecloud.com/latest/deploy-to-oracle-cloud.svg" alt="Deploy to Oracle Cloud">
   </a>
 </p>

@@ -8,11 +8,9 @@ For an existing deployment, go straight to [Run the lab](#run-the-lab).
 **Preview:** the installer is published, but fresh Console installation is still
 being validated. This installs a fixed build in a new stack.
 
-The simplified installer described below is a source update awaiting publication.
-The current README button still requires an Oracle Linux 9 image, uses fixed
-model choices, creates a private artifact bucket and needs manual secret lookup.
-Keep its saved selections and original package for later applies; use the new
-package only for a fresh stack.
+The README button opens the current installer described below. Use it for a
+fresh stack. For an existing stack, keep its saved configuration and selections;
+do not replace its configuration with this package.
 
 Use **US East (Ashburn)** to match the verified OCI model region. You'll need:
 
